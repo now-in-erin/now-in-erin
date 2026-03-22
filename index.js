@@ -47,7 +47,7 @@ function classify(msg) {
   if (/팝니다|팝|판매|삽니다|구매|구입|얼마|골드|가격/.test(msg)) return 'trade';
   if (/파티|구함|모집|인원|\/\d|[0-9]\/[0-9]/.test(msg)) return 'party';
   return 'etc';
-}
+
 }
 
 // ── 마비노기 약어 정규화 테이블
