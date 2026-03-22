@@ -317,9 +317,9 @@ app.get('/api/stats/party', async (req, res) => {
       normalizedMsg = normalizedMsg.replace(new RegExp(abbr, 'g'), full);
     }
 
-    // 크롬 키워드 우선 체크 (올독식 등 글렌 키워드와 혼용되는 경우 방지)
-    const chromePriority = ['크롬바스', '크롬일반', '크일', '크롬일', '크롬', '크쉬', '크롬쉬'];
-    const hasChrome = chromePriority.some(kw => message.includes(kw) || normalizedMsg.includes(kw));
+const msgNoSpace = message.replace(/\s/g, '');
+const chromePriority = ['크롬바스', '크롬일반', '크일', '크롬일', '크롬', '크쉬', '크롬쉬'];
+const hasChrome = chromePriority.some(kw => message.includes(kw) || normalizedMsg.includes(kw) || msgNoSpace.includes(kw));
 
     let matched = false;
     for (const [name, info] of Object.entries(dungeons)) {
