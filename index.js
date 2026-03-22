@@ -86,7 +86,10 @@ const STOP_WORDS = new Set([
   '합시다', '하실', '하세요', '해주세요',
   '같이', '같이요', '같이해요', '같이하실분',
   '하실분', '분들', '분이요', '분만',
-  '지금', '바로', '현재', '오늘', '오후', '오전', '저녁',
+  '지금', '바로', '현재', '오늘', '오후', '오전', '저녁', '새벽', '밤', '낮',
+  '시', '분', '초', '00시', '01시', '02시', '03시', '04시', '05시', '06시',
+  '07시', '08시', '09시', '10시', '11시', '12시', '13시', '14시', '15시',
+  '16시', '17시', '18시', '19시', '20시', '21시', '22시', '23시',
 ]);
 
 function normalizeWord(w) {
@@ -170,7 +173,8 @@ app.get('/api/feed', async (req, res) => {
 
   if (conditions.length > 0) query += ' WHERE ' + conditions.join(' AND ');
   params.push(limit);
-  query += ` ORDER BY date_send DESC LIMIT $${params.length}`;
+  params.push(parseInt(req.query.offset) || 0);
+  query += ` ORDER BY date_send DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
   const result = await pool.query(query, params);
   res.json({ items: result.rows, count: result.rows.length });
@@ -187,7 +191,7 @@ app.get('/api/stats/hourly', async (req, res) => {
       MOD(CAST(EXTRACT(HOUR FROM CAST(date_send AS TIMESTAMP WITH TIME ZONE) AT TIME ZONE 'Asia/Seoul') AS INTEGER), 24) as hour,
       COUNT(*) as count
     FROM horn
-    WHERE date_send::timestamptz >= $1::timestamptz
+    WHERE date_send >= $1
   `;
   const params = [since];
 
@@ -211,7 +215,7 @@ app.get('/api/stats/category', async (req, res) => {
   const server = req.query.server;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-  let query = `SELECT category, COUNT(*) as count FROM horn WHERE date_send::timestamptz >= $1::timestamptz`;
+  let query = `SELECT category, COUNT(*) as count FROM horn WHERE date_send >= $1`;
   const params = [since];
 
   if (server && server !== 'all') {
@@ -233,7 +237,7 @@ app.get('/api/stats/keywords', async (req, res) => {
   const server = req.query.server;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-  let query = `SELECT character_name, message FROM horn WHERE date_send::timestamptz >= $1::timestamptz`;
+  let query = `SELECT character_name, message FROM horn WHERE date_send >= $1`;
   const params = [since];
 
   if (server && server !== 'all') {
@@ -285,7 +289,7 @@ app.get('/api/stats/party', async (req, res) => {
   const server = req.query.server;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-  let query = `SELECT message, date_send FROM horn WHERE category = 'party' AND date_send::timestamptz >= $1::timestamptz`;
+  let query = `SELECT message, date_send FROM horn WHERE category = 'party' AND date_send >= $1`;
   const params = [since];
 
   if (server && server !== 'all') {
@@ -299,8 +303,9 @@ app.get('/api/stats/party', async (req, res) => {
   const dungeons = {
     '브리레흐 (1-3관)': { keywords: ['브리레흐', '브리', '브레', '1관', '2관', '3관', '1-3관', '브트팟', '브리트팟', '정코억분', '정코분배', '구구', '구슬구매'], count: 0, recent: [] },
     '브리레흐 (4관)': { keywords: ['4관'], count: 0, recent: [] },
-    '크롬바스 일반': { keywords: ['크롬일반', '크일', '크롬일', '크롬', '상독화분', '100버', '90버'], count: 0, recent: [] },
+    '크롬바스 일반': { keywords: ['크롬일반', '크일', '크롬일', '크롬바스', '크롬', '상독화분', '100버', '90버'], count: 0, recent: [] },
     '크롬바스 쉬움': { keywords: ['크쉬', '크롬쉬', '크롬쉬움'], count: 0, recent: [] },
+    '몽환의 라비': { keywords: ['몽라', '몽몽라', '몽환라비', '몽환의라비', '몽환의 라비'], count: 0, recent: [] },
     '글렌베르나 일반': { keywords: ['글매', '글렴', '글렌일반', '글렌', '글렌베르나', '헤분', '독식', '올독식', '매어'], count: 0, recent: [] },
     '글렌베르나 쉬움': { keywords: ['글쉬', '글렌쉬움'], count: 0, recent: [] },
     '기타': { keywords: [], count: 0, recent: [] },
@@ -312,9 +317,15 @@ app.get('/api/stats/party', async (req, res) => {
       normalizedMsg = normalizedMsg.replace(new RegExp(abbr, 'g'), full);
     }
 
+    // 크롬 키워드 우선 체크 (올독식 등 글렌 키워드와 혼용되는 경우 방지)
+    const chromePriority = ['크롬바스', '크롬일반', '크일', '크롬일', '크롬', '크쉬', '크롬쉬'];
+    const hasChrome = chromePriority.some(kw => message.includes(kw) || normalizedMsg.includes(kw));
+
     let matched = false;
     for (const [name, info] of Object.entries(dungeons)) {
       if (name === '기타') continue;
+      // 크롬 키워드가 있으면 글렌 건너뜀
+      if (hasChrome && (name === '글렌베르나 일반' || name === '글렌베르나 쉬움')) continue;
       if (info.keywords.some(kw => message.includes(kw) || normalizedMsg.includes(kw))) {
         info.count++;
         if (info.recent.length < 5) info.recent.push({ message, date_send });
@@ -344,23 +355,27 @@ app.get('/api/stats/party', async (req, res) => {
 
   res.json({ total: rows.length, dungeons: dungeonList, memberPatterns });
 });
+
 // 거뿔 왕 (서버별 오늘 최다 발송자)
 app.get('/api/stats/horn-king', async (req, res) => {
   try {
     const kings = {};
-    for (const server of ['류트', '만돌린', '하프', '울프']) {
+    for (const server of SERVERS) {
       const result = await pool.query(`
         SELECT character_name, COUNT(*) as count
         FROM horn
         WHERE server_name = $1
-          AND date_send::timestamptz >= NOW() - INTERVAL '24 hours'
+          AND date_send::timestamptz >= (NOW() AT TIME ZONE 'Asia/Seoul')::date::timestamptz
+          AND date_send::timestamptz < ((NOW() AT TIME ZONE 'Asia/Seoul')::date + 1)::timestamptz
         GROUP BY character_name
         ORDER BY count DESC
         LIMIT 1
       `, [server]);
+
       if (result.rows.length > 0) {
         const name = result.rows[0].character_name;
         const count = parseInt(result.rows[0].count);
+        // 이름 앞 두 글자만 노출, 나머지 XX
         const masked = name.length <= 2
           ? name[0] + 'X'
           : name.slice(0, 2) + 'X'.repeat(name.length - 2);
@@ -379,7 +394,7 @@ app.get('/api/stats/horn-king', async (req, res) => {
 // 전체 통계 요약
 app.get('/api/stats/summary', async (req, res) => {
   const total = await pool.query('SELECT COUNT(*) as count FROM horn');
-  const today = await pool.query(`SELECT COUNT(*) as count FROM horn WHERE date_send::timestamptz >= NOW() - INTERVAL '24 hours'`);
+  const today = await pool.query(`SELECT COUNT(*) as count FROM horn WHERE date_send >= NOW() - INTERVAL '24 hours'`);
   const oldest = await pool.query('SELECT MIN(date_send) as d FROM horn');
   const newest = await pool.query('SELECT MAX(date_send) as d FROM horn');
 

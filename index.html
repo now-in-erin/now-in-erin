@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>지금 에린에서는</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Black+Han+Sans&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Orbit&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
     :root {
-      --bg: #1a1c2e;
-      --surface: #252840;
+      --bg: #0f1117;
+      --surface: #1a1d27;
       --surface2: #222536;
       --border: #2a2f42;
       --border2: #363b52;
@@ -60,14 +60,17 @@
     }
 
     .nav-logo {
-      font-family: 'Black Han Sans', sans-serif;
-      font-size: 24px;
-      color: var(--gold);
-      text-shadow: 0 0 30px rgba(240,208,96,0.4);
+      font-family: 'Orbit', 'Black Han Sans', sans-serif;
+      font-size: 22px;
+      background: linear-gradient(135deg, var(--gold) 0%, #fff8c0 50%, var(--gold) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 12px rgba(240,208,96,0.4));
       margin-right: 48px;
       white-space: nowrap;
       cursor: pointer;
-      letter-spacing: -0.01em;
+      letter-spacing: 0.02em;
       min-width: 200px;
     }
 
@@ -646,7 +649,7 @@
 
     .landing-title {
       font-family: 'Black Han Sans', sans-serif;
-      font-size: 64px;
+      font-size: 52px;
       color: var(--gold);
       text-shadow: 0 0 60px rgba(232,201,106,0.3);
       margin-bottom: 8px;
@@ -696,7 +699,7 @@
     }
 
     .server-btn-name {
-      font-size: 22px;
+      font-size: 18px;
       font-weight: 700;
       margin-bottom: 4px;
     }
@@ -721,6 +724,78 @@
     }
 
     .landing-all-btn:hover { color: var(--text2); border-color: var(--border2); }
+    .server-btn-king {
+      font-size: 11px;
+      color: var(--gold);
+      margin-top: 8px;
+      font-family: 'Noto Sans KR', sans-serif;
+      opacity: 0.85;
+      line-height: 1.4;
+    }
+
+    .server-btn-king-label {
+      font-size: 10px;
+      color: var(--text3);
+      margin-bottom: 2px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+
+    /* ── 모바일 반응형 ── */
+    @media (max-width: 640px) {
+      :root { --nav-h: 104px; }
+
+      nav {
+        flex-wrap: wrap;
+        padding: 10px 16px;
+        height: auto;
+        gap: 8px;
+      }
+
+      .nav-logo {
+        font-size: 18px;
+        margin-right: auto;
+        min-width: unset;
+      }
+
+      .nav-right {
+        margin-left: 0;
+        order: 1;
+      }
+
+      .nav-links {
+        order: 2;
+        width: 100%;
+        flex: unset;
+        gap: 4px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+      }
+
+      .nav-links::-webkit-scrollbar { display: none; }
+
+      .nav-btn {
+        padding: 6px 12px;
+        font-size: 13px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      .wrap { padding: 0 12px; }
+
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+
+      .two-col { grid-template-columns: 1fr; }
+
+      .party-grid { grid-template-columns: 1fr; }
+
+      .landing-title { font-size: 40px; }
+
+      .server-btn-grid { grid-template-columns: repeat(2, 1fr); max-width: 320px; }
+
+      .keyword-bar-track { width: 80px; }
+    }
   </style>
 </head>
 <body>
@@ -736,22 +811,22 @@
       <div class="server-btn" onclick="selectServer('류트')">
         <div class="server-btn-name">류트</div>
         <div class="server-btn-desc">Lute</div>
-        <div id="king-류트" class="server-btn-king" style="font-size:11px;color:var(--gold);margin-top:8px;"></div>
+        <div id="king-류트" class="server-btn-king"></div>
       </div>
       <div class="server-btn" onclick="selectServer('만돌린')">
         <div class="server-btn-name">만돌린</div>
         <div class="server-btn-desc">Mandolin</div>
-        <div id="king-만돌린" class="server-btn-king" style="font-size:11px;color:var(--gold);margin-top:8px;"></div>
+        <div id="king-만돌린" class="server-btn-king"></div>
       </div>
       <div class="server-btn" onclick="selectServer('하프')">
         <div class="server-btn-name">하프</div>
         <div class="server-btn-desc">Harp</div>
-        <div id="king-하프" class="server-btn-king" style="font-size:11px;color:var(--gold);margin-top:8px;"></div>
+        <div id="king-하프" class="server-btn-king"></div>
       </div>
       <div class="server-btn" onclick="selectServer('울프')">
         <div class="server-btn-name">울프</div>
         <div class="server-btn-desc">Wolf</div>
-        <div id="king-울프" class="server-btn-king" style="font-size:11px;color:var(--gold);margin-top:8px;"></div>
+        <div id="king-울프" class="server-btn-king"></div>
       </div>
     </div>
     <button class="landing-all-btn" onclick="selectServer('all')">전체 서버 보기</button>
@@ -955,19 +1030,24 @@
   Chart.defaults.color = '#8891aa';
   Chart.defaults.font = { family: 'JetBrains Mono, Noto Sans KR, sans-serif', size: 11 };
 
+
+
   // ── 거뿔 왕 로드 ──
   async function loadHornKings() {
     try {
       const res = await fetch(`https://erin-server-production.up.railway.app/api/stats/horn-king`);
       const data = await res.json();
-      ['류트', '만돌린', '하프', '울프'].forEach(server => {
+      const servers = ['류트', '만돌린', '하프', '울프'];
+      servers.forEach(server => {
         const el = document.getElementById(`king-${server}`);
         if (!el) return;
         if (data[server]) {
-          el.innerHTML = `<div style="font-size:10px;color:var(--text3);margin-bottom:2px;">👑 오늘의 거뿔 왕</div>${data[server].masked}님 (${data[server].count}회)`;
+          el.innerHTML = `<div class="server-btn-king-label">👑 오늘의 거뿔 왕</div>${data[server].masked}님 (${data[server].count}회)`;
         }
       });
-    } catch (e) {}
+    } catch (e) {
+      // 거뿔 왕 로드 실패 시 조용히 무시
+    }
   }
 
   // ── 서버 선택 랜딩 ──
@@ -1469,8 +1549,6 @@
   setInterval(() => {
     if (document.getElementById('page-analysis').classList.contains('active')) loadAnalysis();
   }, 120000);
-
-  loadHornKings();
 
   // 초기 서버 연결 확인
   fetch(`${API}/api/stats/summary`)
