@@ -301,9 +301,9 @@ app.get('/api/stats/party', async (req, res) => {
   const rows = result.rows.filter(r => !/길드원|길원/.test(r.message));
 
   const dungeons = {
-    '브리레흐 (1-3관)': { keywords: ['브리레흐', '브리', '브레', '1관', '2관', '3관', '1-3관', '브트팟', '브리트팟', '정코억분', '정코분배', '구구', '구슬구매'], count: 0, recent: [] },
+    '브리레흐 (1-3관)': { keywords: ['브리레흐', '브리', '브레', '1관', '2관', '3관', '1-3관', '브트팟', '브리트팟', '정코억분', '정코분배', '구구', '구슬구매', '1-3'], count: 0, recent: [] },
     '브리레흐 (4관)': { keywords: ['4관'], count: 0, recent: [] },
-    '크롬바스 일반': { keywords: ['크롬일반', '크일', '크롬일', '크롬바스', '크롬', '상독화분', '100버', '90버'], count: 0, recent: [] },
+    '크롬바스 일반': { keywords: ['크롬일반', '크일', '크롬일', '크롬바스', '크롬', '상독화분', '100버', '90버', '크 롬'], count: 0, recent: [] },
     '크롬바스 쉬움': { keywords: ['크쉬', '크롬쉬', '크롬쉬움'], count: 0, recent: [] },
     '몽환의 라비': { keywords: ['몽라', '몽몽라', '몽환라비', '몽환의라비', '몽환의 라비'], count: 0, recent: [] },
     '글렌베르나 일반': { keywords: ['글매', '글렴', '글렌일반', '글렌', '글렌베르나', '헤분', '독식', '올독식', '매어'], count: 0, recent: [] },
@@ -365,8 +365,7 @@ app.get('/api/stats/horn-king', async (req, res) => {
         SELECT character_name, COUNT(*) as count
         FROM horn
         WHERE server_name = $1
-          AND date_send::timestamptz >= (NOW() AT TIME ZONE 'Asia/Seoul')::date::timestamptz
-          AND date_send::timestamptz < ((NOW() AT TIME ZONE 'Asia/Seoul')::date + 1)::timestamptz
+          AND date_send::timestamptz >= NOW() - INTERVAL '24 hours'
         GROUP BY character_name
         ORDER BY count DESC
         LIMIT 1
