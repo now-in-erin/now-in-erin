@@ -156,7 +156,8 @@ async function fetchServer(serverName) {
 async function fetchAll() {
   for (const server of SERVERS) {
     await fetchServer(server);
-    await new Promise(r => setTimeout(r, 500));
+    // 넥슨 서버가 놀라지 않도록 서버 1개 조회 후 1초(1000ms) 휴식
+    await new Promise(r => setTimeout(r, 1000)); 
   }
 }
 
@@ -621,11 +622,11 @@ async function start() {
   cron.schedule('0 0 * * *', generateDailySummary, { timezone: "Asia/Seoul" });
   console.log('⏰ 자정 자동 정산 스케줄 등록 완료');
 
-  // 2. 10초마다 넥슨 API 찌르기 (실시간 수집)
+// 2. 30초마다 넥슨 API 찌르기 (기존 10000 -> 30000으로 변경)
   setInterval(() => {
     fetchAll().catch(console.error);
-  }, 10000);
-  console.log('⏰ 10초 실시간 수집 스케줄 등록 완료');
+  }, 30000);
+  console.log('⏰ 30초 실시간 수집 스케줄 등록 완료');
 }
 
 start().catch(console.error);
