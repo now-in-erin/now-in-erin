@@ -371,6 +371,13 @@
       align-items: center;
     }
 
+    <div class="section-title" style="margin-top: 20px;">
+      ✨ 오늘의 에린 요약 <span id="dailySummaryDate" style="font-size:11px; font-weight:normal; margin-left:8px; color:var(--text3);"></span>
+    </div>
+    <div class="daily-summary-grid" id="dailySummaryGrid">
+      <div class="placeholder"><div class="spinner"></div></div>
+    </div>
+
     .summary-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -967,6 +974,29 @@
   </div>
 </div>
 
+/* ── 오늘의 에린 요약 ── */
+    .daily-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 680px) { .daily-summary-grid { grid-template-columns: 1fr; } }
+    
+    .daily-card {
+      background: linear-gradient(135deg, rgba(37,99,235,0.04) 0%, rgba(124,58,237,0.04) 100%);
+      border: 1px solid rgba(167,139,250,0.2);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .daily-card-header { font-weight: 700; color: var(--text); margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
+    .daily-stat-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 4px; }
+    .daily-stat-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .daily-stat-label { color: var(--text2); font-family: 'Noto Sans KR', sans-serif;}
+    .daily-stat-val { font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text); }
+    .daily-stat-val.highlight { color: var(--gold); }
+
 
 <!-- ── 네비게이션 ── -->
 <nav>
@@ -1182,7 +1212,53 @@
   Chart.defaults.color = '#8891aa';
   Chart.defaults.font = { family: 'JetBrains Mono, Noto Sans KR, sans-serif', size: 11 };
 
+async function loadDailySummary() {
+    const server = getServer();
+    const grid = document.getElementById('dailySummaryGrid');
+    try {
+      const res = await fetch(`${API}/api/stats/daily?server=${server}`);
+      const data = await res.json();
 
+      if (!data || data.length === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--text3); font-size:13px; padding:20px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">아직 생성된 요약이 없어요. (매일 자정에 전날 기록이 생성됩니다)</div>';
+        document.getElementById('dailySummaryDate').textContent = '';
+        return;
+      }
+
+      // 가장 최근 날짜의 데이터만 필터링
+      const latestDate = data[0].target_date.split('T')[0];
+      document.getElementById('dailySummaryDate').textContent = `(${latestDate} 기준)`;
+
+      const latestData = data.filter(d => d.target_date.startsWith(latestDate));
+
+      grid.innerHTML = latestData.map(d => {
+        // 이름 마스킹 처리 (보안 및 프라이버시)
+        const maskedName = d.horn_king_name.length <= 2 ? d.horn_king_name[0] + 'X' : d.horn_king_name.slice(0, 2) + 'X'.repeat(d.horn_king_name.length - 2);
+        
+        return `
+        <div class="daily-card">
+          <div class="daily-card-header">
+            <span class="badge badge-server" style="font-size:12px; padding:3px 8px;">${d.server_name}</span>
+            <span style="font-size:12px; color:var(--text3); font-family:'JetBrains Mono', monospace;">어제 총 ${d.total_messages.toLocaleString()}건</span>
+          </div>
+          <div class="daily-stat-row">
+            <span class="daily-stat-label">🔥 가장 핫한 시간</span>
+            <span class="daily-stat-val">${d.peak_hour}시</span>
+          </div>
+          <div class="daily-stat-row">
+            <span class="daily-stat-label">⚔️ 인기 던전</span>
+            <span class="daily-stat-val">${d.popular_dungeon}</span>
+          </div>
+          <div class="daily-stat-row">
+            <span class="daily-stat-label">👑 거뿔 왕</span>
+            <span class="daily-stat-val highlight">${maskedName} (${d.horn_king_count}회)</span>
+          </div>
+        </div>
+      `}).join('');
+    } catch (e) {
+      grid.innerHTML = '<div style="grid-column:1/-1; color:var(--red); font-size:13px;">요약 데이터를 불러오는 중 오류가 발생했습니다.</div>';
+    }
+  }
 
   // ── 거뿔 왕 로드 ──
   async function loadHornKings() {
@@ -1393,7 +1469,7 @@
     const server = getServer();
     const days = document.getElementById('daysFilter').value;
     const qs = `server=${server}&days=${days}`;
-
+// loadDailySummary();
     document.getElementById('analysisStatus').textContent = '로딩 중...';
 
     try {

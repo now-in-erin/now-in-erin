@@ -27,16 +27,18 @@ const pool = new Pool({
 
 // DB 초기화
 async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS horn (
+await pool.query(`
+    CREATE TABLE IF NOT EXISTS daily_summary (
       id SERIAL PRIMARY KEY,
+      target_date DATE,
       server_name TEXT,
-      character_name TEXT,
-      message TEXT,
-      date_send TEXT,
-      category TEXT,
+      total_messages INT,
+      peak_hour INT,
+      popular_dungeon TEXT,
+      horn_king_name TEXT,
+      horn_king_count INT,
       created_at TIMESTAMP DEFAULT NOW(),
-      UNIQUE(server_name, character_name, message, date_send)
+      UNIQUE(target_date, server_name)
     );
     CREATE INDEX IF NOT EXISTS idx_date_send ON horn(date_send);
     CREATE INDEX IF NOT EXISTS idx_category ON horn(category);
@@ -536,6 +538,25 @@ app.get('/api/stats/summary', async (req, res) => {
   });
 });
 
+// 오늘의 에린 요약 데이터 가져오기
+app.get('/api/stats/daily', async (req, res) => {
+  const server = req.query.server;
+  let query = `SELECT * FROM daily_summary ORDER BY target_date DESC, server_name ASC LIMIT 20`;
+  const params = [];
+  
+  if (server && server !== 'all') {
+    query = `SELECT * FROM daily_summary WHERE server_name = $1 ORDER BY target_date DESC LIMIT 7`;
+    params.push(server);
+  }
+  
+  try {
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── 서버 시작 ───────────────────────────────────
 
 async function start() {
@@ -548,6 +569,76 @@ async function start() {
     console.log(`   http://localhost:${PORT}\n`);
     fetchAll();
   });
+
+  // 매일 밤 자정(00:00 KST)에 전날 데이터 요약 스케줄러
+cron.schedule('0 0 * * *', async () => {
+  console.log('🌙 자정 요약 작업 시작: 오늘의 에린 요약지 생성');
+  // 한국 시간 기준으로 어제 날짜 구하기
+  const nowKst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+  const yesterday = new Date(nowKst);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const targetDateStr = yesterday.toISOString().split('T')[0];
+
+  for (const server of SERVERS) {
+    try {
+      // 1. 총 메시지 수 & 가장 활발했던 시간대
+      const hourRes = await pool.query(`
+        SELECT EXTRACT(HOUR FROM CAST(date_send AS TIMESTAMP WITH TIME ZONE) AT TIME ZONE 'Asia/Seoul') as hour, COUNT(*) as count
+        FROM horn
+        WHERE server_name = $1 AND DATE(CAST(date_send AS TIMESTAMP WITH TIME ZONE) AT TIME ZONE 'Asia/Seoul') = $2
+        GROUP BY hour ORDER BY count DESC
+      `, [server, targetDateStr]);
+
+      const totalMessages = hourRes.rows.reduce((sum, r) => sum + parseInt(r.count), 0);
+      const peakHour = hourRes.rows.length > 0 ? parseInt(hourRes.rows[0].hour) : 0;
+
+      // 2. 거뿔왕
+      const kingRes = await pool.query(`
+        SELECT character_name, COUNT(*) as count
+        FROM horn
+        WHERE server_name = $1 AND DATE(CAST(date_send AS TIMESTAMP WITH TIME ZONE) AT TIME ZONE 'Asia/Seoul') = $2
+        GROUP BY character_name ORDER BY count DESC LIMIT 1
+      `, [server, targetDateStr]);
+      
+      const hornKingName = kingRes.rows.length > 0 ? kingRes.rows[0].character_name : '없음';
+      const hornKingCount = kingRes.rows.length > 0 ? parseInt(kingRes.rows[0].count) : 0;
+
+      // 3. 인기 던전 (가단한 키워드 매칭)
+      const partyRes = await pool.query(`
+        SELECT message FROM horn
+        WHERE server_name = $1 AND category = 'party' AND DATE(CAST(date_send AS TIMESTAMP WITH TIME ZONE) AT TIME ZONE 'Asia/Seoul') = $2
+      `, [server, targetDateStr]);
+
+      const dungeonCounts = { '브리레흐':0, '크롬바스':0, '글렌베르나':0, '몽환의 라비':0 };
+      partyRes.rows.forEach(r => {
+        const msg = r.message;
+        if (msg.includes('브리') || msg.includes('브레')) dungeonCounts['브리레흐']++;
+        else if (msg.includes('크롬') || msg.includes('크일') || msg.includes('크쉬')) dungeonCounts['크롬바스']++;
+        else if (msg.includes('글렌') || msg.includes('글매') || msg.includes('글쉬')) dungeonCounts['글렌베르나']++;
+        else if (msg.includes('몽라') || msg.includes('몽환')) dungeonCounts['몽환의 라비']++;
+      });
+
+      let popularDungeon = '없음';
+      let maxCount = 0;
+      for (const [dName, dCount] of Object.entries(dungeonCounts)) {
+        if (dCount > maxCount) { maxCount = dCount; popularDungeon = dName; }
+      }
+
+      // 4. DB 저장
+      await pool.query(`
+        INSERT INTO daily_summary (target_date, server_name, total_messages, peak_hour, popular_dungeon, horn_king_name, horn_king_count)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT (target_date, server_name) DO UPDATE SET
+          total_messages = EXCLUDED.total_messages, peak_hour = EXCLUDED.peak_hour,
+          popular_dungeon = EXCLUDED.popular_dungeon, horn_king_name = EXCLUDED.horn_king_name, horn_king_count = EXCLUDED.horn_king_count
+      `, [targetDateStr, server, totalMessages, peakHour, popularDungeon, hornKingName, hornKingCount]);
+
+    } catch (err) {
+      console.error(`[${server}] 일일 요약 생성 실패:`, err);
+    }
+  }
+  console.log('🌙 자정 요약 작업 완료');
+}, { timezone: "Asia/Seoul" });
 
  setInterval(() => {
   fetchAll().catch(console.error);
