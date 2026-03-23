@@ -3,14 +3,18 @@ const express = require('express');
 const cors = require('cors');
 const cron = require('node-cron');
 const { Pool } = require('pg');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const API_KEY = process.env.NEXON_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const PORT = process.env.PORT || 3000;
 const SERVERS = ['류트', '만돌린', '하프', '울프'];
+
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 console.log(`[디버그] API_KEY 앞 10자: ${API_KEY ? API_KEY.slice(0, 10) : '없음 (!!)'}`);
 console.log(`[디버그] 수집 서버: ${SERVERS.join(', ')}`);
@@ -44,10 +48,9 @@ async function initDB() {
 // 카테고리 분류
 function classify(msg) {
   if (/길드원|길원/.test(msg)) return 'guild';
-  if (/팝니다|팝|판매|삽니다|구매|구입|얼마|골드|가격/.test(msg)) return 'trade';
   if (/파티|구함|모집|인원|\/\d|[0-9]\/[0-9]/.test(msg)) return 'party';
+  if (/팝니다|팝|판매|삽니다|구매|구입|얼마|골드|가격/.test(msg)) return 'trade';
   return 'etc';
-
 }
 
 // ── 마비노기 약어 정규화 테이블
@@ -57,7 +60,7 @@ const NORMALIZE_MAP = {
   '9채': '채널9', '10채': '채널10',
   '브리': '브리레흐', '브레': '브리레흐',
   '1관': '브리1-3관', '2관': '브리1-3관', '3관': '브리1-3관',
-  '1-3관': '브리1-3관', '1-3': '브리1-3관', '4관': '브리4관',
+  '1-3관': '브리1-3관', '4관': '브리4관',
   '브트팟': '브리트라이팟', '브리트팟': '브리트라이팟',
   '구구': '구슬구매', '정코억분': '정코억분배', '정코분배': '정코억분배',
   '크롬': '크롬일반', '크일': '크롬일반', '크롬일': '크롬일반',
@@ -299,7 +302,7 @@ app.get('/api/stats/party', async (req, res) => {
   }
 
   const result = await pool.query(query, params);
-const rows = result.rows.filter(r => !/길드원|길원/.test(r.message) && !/팝니다|팔아요|판매|삽니다|사요|구매|살게|팜|삼/.test(r.message));
+  const rows = result.rows.filter(r => !/길드원|길원/.test(r.message));
 
   const dungeons = {
     '브리레흐 (1-3관)': { keywords: ['브리레흐', '브리', '브레', '1관', '2관', '3관', '1-3관', '브트팟', '브리트팟', '정코억분', '정코분배', '구구', '구슬구매'], count: 0, recent: [] },
@@ -396,10 +399,111 @@ app.get('/api/stats/horn-king', async (req, res) => {
   }
 });
 
+
+// 닉네임 검색
+app.get('/api/user/:name', async (req, res) => {
+  const name = req.params.name;
+  try {
+    const result = await pool.query(`
+      SELECT server_name, message, date_send, category
+      FROM horn
+      WHERE character_name = $1
+      ORDER BY date_send DESC
+      LIMIT 200
+    `, [name]);
+
+    const rows = result.rows;
+    if (rows.length === 0) {
+      return res.json({ found: false, name });
+    }
+
+    // 통계
+    const total = rows.length;
+    const servers = {};
+    const categories = { party: 0, trade: 0, guild: 0, etc: 0 };
+    const hourMap = new Array(24).fill(0);
+
+    rows.forEach(r => {
+      servers[r.server_name] = (servers[r.server_name] || 0) + 1;
+      categories[r.category] = (categories[r.category] || 0) + 1;
+      const h = (new Date(r.date_send).getUTCHours() + 9) % 24;
+      hourMap[h]++;
+    });
+
+    const peakHour = hourMap.indexOf(Math.max(...hourMap));
+    const recentMessages = rows.slice(0, 10).map(r => r.message);
+
+    res.json({
+      found: true,
+      name,
+      total,
+      servers,
+      categories,
+      hourMap,
+      peakHour,
+      recentMessages,
+      oldest: rows[rows.length - 1].date_send,
+      newest: rows[0].date_send,
+    });
+  } catch (e) {
+    console.error('[닉네임 검색 오류]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// AI 거뿔 패턴 분석
+app.get('/api/user/:name/analyze', async (req, res) => {
+  const name = req.params.name;
+
+  if (!genAI) {
+    return res.status(500).json({ error: 'Gemini API 키가 없어요' });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT message, category, date_send
+      FROM horn
+      WHERE character_name = $1
+      ORDER BY date_send DESC
+      LIMIT 100
+    `, [name]);
+
+    const rows = result.rows;
+    if (rows.length === 0) {
+      return res.json({ found: false });
+    }
+
+    const messages = rows.map(r => r.message).join('\n');
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    const prompt = `다음은 마비노기 게임의 "${name}" 유저가 거대한 외침의 뿔피리(서버 전체 채팅)로 보낸 메시지들이야:
+
+${messages}
+
+이 유저의 거뿔 패턴을 분석해서 아래 JSON 형식으로만 답해줘. 다른 말은 하지 마:
+{
+  "type": "유저 유형 (예: 브리 파티장, 새벽 사냥꾼, 거래의 신, 뻘뿔러, 길드 홍보대사 등 창의적으로)",
+  "description": "2~3문장으로 이 유저 특징 설명 (마비노기 게임 맥락으로)",
+  "traits": ["특징1", "특징2", "특징3"],
+  "activeTime": "주로 활동하는 시간대",
+  "mainActivity": "주요 활동"
+}`;
+
+    const result2 = await model.generateContent(prompt);
+    const text = result2.response.text().replace(/```json|```/g, '').trim();
+    const analysis = JSON.parse(text);
+
+    res.json({ found: true, name, total: rows.length, analysis });
+  } catch (e) {
+    console.error('[AI 분석 오류]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // 전체 통계 요약
 app.get('/api/stats/summary', async (req, res) => {
   const total = await pool.query('SELECT COUNT(*) as count FROM horn');
- const today = await pool.query(`SELECT COUNT(*) as count FROM horn WHERE date_send::timestamptz >= NOW() - INTERVAL '24 hours'`);
+  const today = await pool.query(`SELECT COUNT(*) as count FROM horn WHERE date_send::timestamptz >= NOW() - INTERVAL '24 hours'`);
   const oldest = await pool.query('SELECT MIN(date_send) as d FROM horn');
   const newest = await pool.query('SELECT MAX(date_send) as d FROM horn');
 

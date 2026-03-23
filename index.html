@@ -802,6 +802,134 @@
 
       .keyword-bar-track { width: 80px; }
     }
+
+    /* ── 유저 분석 ── */
+    .search-box {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .search-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 18px;
+      color: var(--text);
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    .search-input:focus { border-color: var(--gold); }
+    .search-input::placeholder { color: var(--text3); }
+
+    .user-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    .user-name {
+      font-size: 24px;
+      font-weight: 900;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .user-sub {
+      font-size: 12px;
+      color: var(--text3);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 20px;
+    }
+
+    .user-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .user-stat {
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .user-stat-num {
+      font-size: 22px;
+      font-weight: 900;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--gold);
+    }
+
+    .user-stat-label {
+      font-size: 11px;
+      color: var(--text3);
+      margin-top: 4px;
+    }
+
+    .ai-card {
+      background: linear-gradient(135deg, rgba(184,134,11,0.06) 0%, rgba(124,58,237,0.06) 100%);
+      border: 1px solid rgba(184,134,11,0.2);
+      border-radius: 14px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .ai-type {
+      font-size: 20px;
+      font-weight: 900;
+      color: var(--gold);
+      margin-bottom: 8px;
+    }
+
+    .ai-desc {
+      font-size: 14px;
+      color: var(--text2);
+      line-height: 1.7;
+      margin-bottom: 14px;
+    }
+
+    .ai-traits {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .ai-trait {
+      background: rgba(184,134,11,0.1);
+      border: 1px solid rgba(184,134,11,0.2);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      color: var(--gold);
+    }
+
+    .recent-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .recent-msg-item {
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--text2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   </style>
 </head>
 <body>
@@ -848,6 +976,7 @@
     <button class="nav-btn" id="nav-analysis" onclick="showPage('analysis')">📊 분석</button>
     <button class="nav-btn" id="nav-keywords" onclick="showPage('keywords')">☁️ 키워드</button>
     <button class="nav-btn" id="nav-party" onclick="showPage('party')">🎮 파티 모집</button>
+    <button class="nav-btn" id="nav-user" onclick="showPage('user')">🔍 유저 분석</button>
   </div>
   <div class="nav-right">
     <select id="globalServer" onchange="onServerChange()">
@@ -1025,6 +1154,23 @@
   </div>
 </div>
 
+<!-- 유저 분석 페이지 -->
+<div class="page" id="page-user">
+  <div class="wrap">
+    <div class="page-header">
+      <div class="page-title">유저 분석</div>
+      <div class="page-sub">// 닉네임으로 거뿔 패턴 분석</div>
+    </div>
+
+    <div class="search-box">
+      <input class="search-input" id="userSearchInput" placeholder="캐릭터 닉네임 입력..." onkeydown="if(event.key==='Enter') searchUser()" />
+      <button class="btn btn-primary" onclick="searchUser()">🔍 검색</button>
+    </div>
+
+    <div id="userResult"></div>
+  </div>
+</div>
+
 <script>
   const API = 'https://erin-server-production.up.railway.app';
   let feedInterval = null;
@@ -1073,6 +1219,7 @@
     if (name === 'analysis') loadAnalysis();
     if (name === 'keywords') loadKeywords();
     if (name === 'party') loadParty();
+    if (name === 'user') {};
   }
 
   // ── 서버 변경 ──
@@ -1366,6 +1513,99 @@
   }
 
 
+
+  // ════════════════════════════════
+  //  유저 분석
+  // ════════════════════════════════
+
+  async function searchUser() {
+    const name = document.getElementById('userSearchInput').value.trim();
+    if (!name) return;
+
+    const result = document.getElementById('userResult');
+    result.innerHTML = '<div class="loading-row"><div class="spinner"></div> 검색 중...</div>';
+
+    try {
+      const res = await fetch(`${API}/api/user/${encodeURIComponent(name)}`);
+      const data = await res.json();
+
+      if (!data.found) {
+        result.innerHTML = `<div class="user-card"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">${name} 님의 거뿔 기록이 없어요</div><div class="empty-sub">수집된 기간 내에 거뿔을 불지 않았거나 닉네임이 다를 수 있어요</div></div></div>`;
+        return;
+      }
+
+      const serverList = Object.entries(data.servers).map(([s, c]) => `${s}(${c})`).join(', ');
+      const catList = [
+        data.categories.party ? `파티 ${data.categories.party}` : '',
+        data.categories.trade ? `거래 ${data.categories.trade}` : '',
+        data.categories.guild ? `길드 ${data.categories.guild}` : '',
+        data.categories.etc ? `일반 ${data.categories.etc}` : '',
+      ].filter(Boolean).join(' · ');
+
+      result.innerHTML = `
+        <div class="user-card">
+          <div class="user-name">${data.name}</div>
+          <div class="user-sub">${serverList} · ${catList}</div>
+          <div class="user-stats">
+            <div class="user-stat">
+              <div class="user-stat-num">${data.total}</div>
+              <div class="user-stat-label">총 거뿔 수</div>
+            </div>
+            <div class="user-stat">
+              <div class="user-stat-num">${data.peakHour}시</div>
+              <div class="user-stat-label">주 활동 시간</div>
+            </div>
+            <div class="user-stat">
+              <div class="user-stat-num">${Object.keys(data.servers).length}개</div>
+              <div class="user-stat-label">활동 서버</div>
+            </div>
+          </div>
+          <div class="section-title">최근 거뿔</div>
+          <div class="recent-messages">
+            ${data.recentMessages.map(m => `<div class="recent-msg-item">📯 ${m}</div>`).join('')}
+          </div>
+        </div>
+        <div id="aiAnalysisArea">
+          <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;" onclick="analyzeUser('${data.name}')">✨ AI 거뿔 패턴 분석하기</button>
+        </div>
+      `;
+    } catch (e) {
+      result.innerHTML = '<div class="user-card"><div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">오류가 발생했어요</div></div></div>';
+    }
+  }
+
+  async function analyzeUser(name) {
+    const area = document.getElementById('aiAnalysisArea');
+    area.innerHTML = '<div class="loading-row"><div class="spinner"></div> AI가 분석 중... (5~10초)</div>';
+
+    try {
+      const res = await fetch(`${API}/api/user/${encodeURIComponent(name)}/analyze`);
+      const data = await res.json();
+
+      if (!data.found || !data.analysis) {
+        area.innerHTML = '<div class="ai-card"><div class="ai-type">분석 실패</div><div class="ai-desc">데이터가 부족하거나 오류가 발생했어요</div></div>';
+        return;
+      }
+
+      const a = data.analysis;
+      area.innerHTML = `
+        <div class="ai-card">
+          <div style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:8px;">✨ AI 분석 결과</div>
+          <div class="ai-type">「 ${a.type} 」</div>
+          <div class="ai-desc">${a.description}</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:8px;">주요 특징</div>
+          <div class="ai-traits">
+            ${(a.traits || []).map(t => `<span class="ai-trait">${t}</span>`).join('')}
+          </div>
+          ${a.activeTime ? `<div style="font-size:12px;color:var(--text3);margin-top:12px;">⏰ ${a.activeTime}</div>` : ''}
+          ${a.mainActivity ? `<div style="font-size:12px;color:var(--text3);margin-top:4px;">🎯 ${a.mainActivity}</div>` : ''}
+        </div>
+      `;
+    } catch (e) {
+      area.innerHTML = '<div class="ai-card"><div class="ai-type">분석 실패</div><div class="ai-desc">오류가 발생했어요</div></div>';
+    }
+  }
+
   // ════════════════════════════════
   //  파티 모집
   // ════════════════════════════════
@@ -1555,6 +1795,8 @@
   setInterval(() => {
     if (document.getElementById('page-analysis').classList.contains('active')) loadAnalysis();
   }, 120000);
+
+  loadHornKings();
 
   loadHornKings();
 
