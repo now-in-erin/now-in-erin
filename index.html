@@ -1349,7 +1349,7 @@
     document.getElementById('stopBtn').style.display = '';
     document.getElementById('feed').innerHTML = '<div class="loading-row"><div class="spinner"></div> 불러오는 중...</div>';
     fetchFeed();
-    feedInterval = setInterval(fetchFeed, 30000);
+    feedInterval = setInterval(fetchFeed, 10000);
   }
 
   function stopFeed() {

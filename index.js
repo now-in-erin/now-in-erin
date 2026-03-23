@@ -549,9 +549,10 @@ async function start() {
     fetchAll();
   });
 
-  cron.schedule('*/1 * * * *', fetchAll);
-console.log('⏰ 1분마다 자동 수집 스케줄 등록 완료');
-  console.log('⏰ 10분마다 자동 수집 스케줄 등록 완료');
+ setInterval(() => {
+  fetchAll().catch(console.error);
+}, 10000);
+console.log('⏰ 10초마다 넥슨 API 자동 수집 스케줄 등록 완료');
 }
 
 start().catch(console.error);
