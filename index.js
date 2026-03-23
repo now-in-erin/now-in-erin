@@ -237,6 +237,129 @@ app.get('/api/admin/force-summary', async (req, res) => {
   res.send('✅ 어제 데이터 강제 정산 완료! 새로고침 해보세요.');
 });
 
+// ─── (여기서부터 복사) ───
+
+// 닉네임 검색 (아까 날아간 기본 검색 기능 복구)
+app.get('/api/user/:name', async (req, res) => {
+  const name = req.params.name;
+  try {
+    const result = await pool.query(`
+      SELECT server_name, message, date_send, category
+      FROM horn
+      WHERE character_name = $1
+      ORDER BY date_send DESC
+      LIMIT 200
+    `, [name]);
+
+    const rows = result.rows;
+    if (rows.length === 0) return res.json({ found: false, name });
+
+    const total = rows.length;
+    const servers = {};
+    const categories = { party: 0, trade: 0, guild: 0, etc: 0 };
+    const hourMap = new Array(24).fill(0);
+
+    rows.forEach(r => {
+      servers[r.server_name] = (servers[r.server_name] || 0) + 1;
+      categories[r.category] = (categories[r.category] || 0) + 1;
+      const h = (new Date(r.date_send).getUTCHours() + 9) % 24;
+      hourMap[h]++;
+    });
+
+    const peakHour = hourMap.indexOf(Math.max(...hourMap));
+    const recentMessages = rows.slice(0, 10).map(r => r.message);
+
+    res.json({
+      found: true, name, total, servers, categories, hourMap, peakHour, recentMessages,
+      oldest: rows[rows.length - 1].date_send, newest: rows[0].date_send,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// AI 분석 (메타데이터 + 고인물 프롬프트 적용된 매운맛 버전)
+app.get('/api/user/:name/analyze', async (req, res) => {
+  const name = req.params.name;
+  if (!genAI) return res.status(500).json({ error: 'Gemini API 키가 없어요' });
+
+  try {
+    const result = await pool.query(`
+      SELECT message, category, date_send, server_name 
+      FROM horn
+      WHERE character_name = $1 
+      ORDER BY date_send DESC 
+      LIMIT 100
+    `, [name]);
+
+    const rows = result.rows;
+    if (rows.length === 0) return res.json({ found: false });
+
+    const total = rows.length;
+    let partyCount = 0, tradeCount = 0, guildCount = 0, etcCount = 0;
+    const hourMap = new Array(24).fill(0);
+
+    const messages = rows.map(r => {
+      if (r.category === 'party') partyCount++;
+      else if (r.category === 'trade') tradeCount++;
+      else if (r.category === 'guild') guildCount++;
+      else etcCount++;
+
+      const h = (new Date(r.date_send).getUTCHours() + 9) % 24;
+      hourMap[h]++;
+      return `[${h}시] ${r.message}`;
+    }).join('\n');
+
+    const peakHour = hourMap.indexOf(Math.max(...hourMap));
+    const mainCategory = Object.entries({ 파티: partyCount, 거래: tradeCount, 길드홍보: guildCount, 일반잡담: etcCount })
+      .sort((a, b) => b[1] - a[1])[0][0];
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    const prompt = `
+너는 마비노기 20년 차 초고인물 밀레시안이야.
+다음은 유저 "${name}"의 최근 거뿔(전체 채팅) 100개 기록과 통계 데이터야.
+
+[유저 통계 힌트]
+- 가장 거뿔을 많이 부는 시간: ${peakHour}시
+- 가장 많이 쓰는 거뿔 목적: ${mainCategory} (파티:${partyCount}, 거래:${tradeCount}, 길드:${guildCount}, 일반:${etcCount})
+
+[최근 거뿔 내용]
+${messages}
+
+이 데이터를 바탕으로 이 유저의 에린 플레이 스타일을 아주 날카롭고 재밌게 프로파일링 해줘.
+
+[마비노기 유저 유형 가이드라인 (참고해서 창의적으로 지어내도 됨)]
+- 다클라 쌀먹러: 폐지 줍기, 숲(골드) 판매, 가성비 던전 뺑뺑이
+- 에린의 거상: 혐사, 경매장 수수료 아끼려고 거뿔로 비싼 템(붕마정 등) 거래, "제시요" 남발
+- 의장러 / 스샷러: 염색 앰플, 신상 옷 구매, 던바튼 1채널 석상, "이 지향색 팝니다"
+- 전투광 / 결사대장: 크롬바스 100, 글렌베르나 매어 등 최상위 던전 빡숙 팟 구함, 깐깐한 조건
+- 뉴비 / 복귀러: 모르는 거 질문, 서툰 파티 구인, 헬프 요청
+- 길드 간부: 툭하면 길드원 모집 거뿔 붐, 친목 위주
+- 확성기 빌런(뻘뿔러): 새벽에 쓸데없는 잡담, 애니메이션 대사, "누구 바보" 같은 친목 거뿔 낭비
+
+아래 JSON 형식으로만 딱 떨어지게 답변해. 다른 말은 절대 추가하지 마.
+{
+  "type": "유저 칭호 (예: 새벽의 브리레흐 공장장, 던바튼 1채널 거상, 낭만파 길드 마스터 등 재미있게)",
+  "description": "이 유저는 어떤 스타일로 게임을 즐기는지 마비노기 세계관에 맞게 2~3문장으로 재미있게 요약",
+  "traits": ["핵심 특징 1 (예: 빡숙 파티 선호)", "핵심 특징 2 (예: 경매장 수수료 혐오자)", "핵심 특징 3"],
+  "activeTime": "주로 언제 접속하는지 (예: 새벽반, 직장인 퇴근 시간 등)",
+  "mainActivity": "이 유저가 마비노기에서 주로 하는 짓"
+}`;
+
+    const result2 = await model.generateContent(prompt);
+    const text = result2.response.text().replace(/```json|```/g, '').trim();
+    const analysis = JSON.parse(text);
+
+    res.json({ found: true, name, total: rows.length, analysis });
+  } catch (e) {
+    console.error('[AI 분석 오류]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+//
+
 async function start() {
   await initDB();
   app.listen(PORT, () => { console.log(`\n🎺 백엔드 서버 시작 (포트: ${PORT})`); fetchAll(); });
