@@ -359,6 +359,52 @@ app.get('/api/stats/party', async (req, res) => {
 
 // ─── (여기서부터 복사) ───
 
+// ── 💰 거뿔 시세 발골기 (Market API) ──
+app.get('/api/stats/market', async (req, res) => {
+  const { server, days } = req.query;
+  const since = new Date(Date.now() - (parseInt(days) || 1) * 24 * 60 * 60 * 1000).toISOString();
+  
+  // 거래(trade) 카테고리 거뿔만 최근 순으로 500개 긁어옵니다.
+  let query = `SELECT server_name, character_name, message, date_send FROM horn WHERE category = 'trade' AND date_send >= $1 ORDER BY date_send DESC LIMIT 500`;
+  const params = [since];
+  if (server && server !== 'all') { params.push(server); query += ` AND server_name = $${params.length}`; }
+  
+  try {
+    const result = await pool.query(query, params);
+    const trades = [];
+    
+    // 🔥 마비노기식 거래 정규표현식: [아이템] + [가격 숫자.숫자] + [억/숲/만/골드] + [팜/삼]
+    const tradeRegex = /(.*?)\s+([0-9]+(?:\.[0-9]+)?)\s*(억|숲|만|골드|수표)\s*(팝니다|삽니다|판매|구매|팜|삼|팔아요|사요)/;
+
+    result.rows.forEach(r => {
+      const match = r.message.match(tradeRegex);
+      if (match) {
+        // 아이템명 앞에 붙은 [판매], <구매> 같은 괄호 태그나 잡동사니 기호 제거
+        let item = match[1].replace(/^[\[\(<【].*?[\]\)>】]/, '').replace(/[~!@#$^&*]/g, '').trim();
+        
+        const price = parseFloat(match[2]);
+        const unit = match[3];
+        const action = match[4].includes('사') || match[4].includes('구매') || match[4].includes('삼') ? '구매' : '판매';
+        
+        if (item.length > 1) {
+          trades.push({
+            server: r.server_name,
+            character: r.character_name,
+            item: item, // 발골된 아이템
+            price: price, // 발골된 가격
+            unit: unit, // 단위 (억/숲)
+            action: action, // 판매/구매
+            time: r.date_send,
+            original: r.message // 원본 거뿔 (검증용)
+          });
+        }
+      }
+    });
+    
+    res.json({ total_scanned: result.rows.length, extracted: trades.length, trades });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // 닉네임 검색 (아까 날아간 기본 검색 기능 복구)
 app.get('/api/user/:name', async (req, res) => {
   const name = req.params.name;
