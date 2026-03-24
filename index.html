@@ -1894,7 +1894,6 @@
     grid.innerHTML = (data.dungeons || []).map(d => {
       const cls = DUNGEON_COLOR[d.color] || 'd-etc';
       const recentHtml = d.recent.slice(0,3).map(r => {
-        // 🔥 초 단위까지 정확히 나오는 [19:30:15] 시간 표시
         const dObj = new Date(r.date);
         const hh = String(dObj.getHours()).padStart(2, '0');
         const mm = String(dObj.getMinutes()).padStart(2, '0');
@@ -1910,8 +1909,7 @@
           <div class="dungeon-recent">${recentHtml || '<div style="font-size:11px;color:var(--text3);">최근 모집 없음</div>'}</div>
         </div>`;
     }).join('');
-
-    renderMemberChart(data.memberPatterns || {});
+    // 🔥 에러의 주범이었던 renderMemberChart() 호출 코드 삭제 완료!
   }
 
   function renderMemberChart(patterns) {

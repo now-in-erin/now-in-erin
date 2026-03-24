@@ -288,7 +288,7 @@ app.get('/api/admin/force-summary', async (req, res) => {
   res.send('✅ 어제 데이터 강제 정산 완료! 새로고침 해보세요.');
 });
 
-// ── 키워드 트렌드 통계 API ──
+// ── 🔥 키워드 트렌드 통계 API (최종 방어선 구축 완료) ──
 app.get('/api/stats/keywords', async (req, res) => {
   const { server, category, days } = req.query;
   const since = new Date(Date.now() - (parseInt(days) || 1) * 24 * 60 * 60 * 1000).toISOString();
@@ -301,9 +301,43 @@ app.get('/api/stats/keywords', async (req, res) => {
     const result = await pool.query(query, params);
     const nicknames = new Set(result.rows.map(r => r.character_name));
     const freq = {};
+    
+    // 다단어 묶기
+    const MULTI_WORDS = {
+      '심판의 칼날': '심판의칼날', '파멸의 로브': '파멸의로브',
+      '나이트 브링어': '나이트브링어', '태양과 달의 검': '태달검'
+    };
+
     result.rows.forEach(r => {
-      const words = r.message.split(/[\s\[\]\(\)#:,.!?~ㅋㅎ/\\]+/).filter(w => w.length >= 2);
-      words.forEach(w => { if (!nicknames.has(w)) freq[w] = (freq[w] || 0) + 1; });
+      let msg = r.message;
+
+      for (const [key, val] of Object.entries(MULTI_WORDS)) {
+        msg = msg.replace(new RegExp(key, 'g'), val);
+      }
+
+      // 💣 1차 핵폭격: 거래/파티 단어 싹쓸이
+      msg = msg.replace(/구매합니다|판매합니다|구합니다|팝니다|삽니다|팔아요|사요|구함|팜|삼|구매|판매|구입|개당|제시|흥정|선받|풀팟|가실분/g, ' ');
+      
+      // 💣 2차 핵폭격: 숫자 + 단위 (작가님이 말씀하신 '뭉', '뭉치' 완벽 추가!)
+      msg = msg.replace(/[0-9]+(명|인|채|릴|팟|숲|억|만|골|골드|수표|랩|렙|옵|관|뭉|뭉치)/g, ' ');
+      
+      // 💣 3차 핵폭격: 채널 
+      msg = msg.replace(/(채널|ch)\s*[0-9]+|[0-9]+\s*(채널|ch|채)/gi, ' ');
+
+      // 먼지 털어낸 후 단어 쪼개기
+      const words = msg.split(/[\s\[\]\(\)#:,.!?~ㅋㅎ/\\]+/).filter(w => w.length >= 2);
+      
+      words.forEach(w => {
+        if (nicknames.has(w)) return; // 닉네임 컷
+        if (/^[0-9]+$/.test(w)) return; // 순수 숫자 컷
+        
+        // 🗡️ 최종 확인사살 (정규식을 뚫고 들어온 잔당 처리)
+        if (w.endsWith('요')) return; // '~요' 로 끝나는 단어 (가요, 해요 등) 사살
+        if (w.includes('삽니다') || w.includes('팝니다') || w.includes('구매') || w.includes('판매') || w.includes('구합')) return;
+        if (w.includes('채널')) return; // '채널' 글자가 들어간 모든 단어 사살
+        
+        freq[w] = (freq[w] || 0) + 1;
+      });
     });
     res.json({ keywords: Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0, 20).map(([word, count]) => ({ word, count })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
