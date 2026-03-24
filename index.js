@@ -339,11 +339,12 @@ app.get('/api/stats/party', async (req, res) => {
       let key = '기타';
       const msg = r.message;
       
-      if (/브리|브레|1-3관/.test(msg)) key = '브리레흐';
-      else if (/크롬|크일|크쉬/.test(msg)) key = '크롬바스';
-      else if (/글렌|글매|글쉬/.test(msg)) key = '글렌베르나';
-      else if (/몽라|몽환/.test(msg)) key = '몽환의 라비';
-      else if (/필-발|왕복|필리아|코르|발레스|켈-발|항교|교역/.test(msg)) key = '교역';
+      if (/브리|브리레흐|1-3관|1~3관|1-3|1~3/.test(msg)) key = '브리레흐 1-3관';
+      else if (/4관/.test(msg)) key = '브리레흐 4관';
+      else if (/크롬|크롬바스|빠스|크일|크쉬/.test(msg)) key = '크롬바스';
+      else if (/글렌|글매|글렴|글쉬/.test(msg)) key = '글렌베르나';
+      else if (/몽라|몽몽라|몽환/.test(msg)) key = '몽환의 라비';
+      else if (/필발|왕복|필리아|코르|발레스|켈발|항교|교역/.test(msg)) key = '교역';
       
       dungeons[key].count++;
       if (dungeons[key].recent.length < 3) {
