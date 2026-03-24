@@ -1501,7 +1501,7 @@
   }
 
   // ── 거뿔 왕 로드 ──
-  aasync function loadHornKings() {
+  async function loadHornKings() {
     try {
       const res = await fetch(`${API}/api/stats/horn-king`);
       const data = await res.json();
