@@ -40,7 +40,8 @@ async function initDB() {
 }
 
 function classify(msg) {
-  if (/길드원|길원/.test(msg)) return 'guild';
+  // 🔥 성장, 길드모집 등 작가님 요청 키워드 추가! (파티보다 무조건 먼저 분류됨)
+  if (/길드|길원|길모|성장/.test(msg)) return 'guild';
   if (/파티|구함|모집|인원|\/\d|[0-9]\/[0-9]/.test(msg)) return 'party';
   if (/팝니다|팝|판매|삽니다|구매|구입|얼마|골드|가격/.test(msg)) return 'trade';
   return 'etc';
@@ -100,7 +101,7 @@ async function fetchAll() {
 app.get('/api/feed', async (req, res) => {
   const limit = parseInt(req.query.limit) || 100;
   const { category, keyword, server, offset } = req.query;
-  let query = 'SELECT * FROM horn', params = [], conditions = [];
+  let query = `SELECT message, date_send FROM horn WHERE category = 'party' AND message !~ '길드|길원|길모|성장' AND date_send >= $1`;
 
   if (server && server !== 'all') { params.push(server); conditions.push(`server_name = $${params.length}`); }
   if (category && category !== 'all') { params.push(category); conditions.push(`category = $${params.length}`); }
@@ -207,16 +208,17 @@ app.get('/api/stats/horn-king', async (req, res) => {
 });
 
 
-// 길드원 모집 현황
+// ── 길드원 모집 현황 ──
 app.get('/api/stats/guilds', async (req, res) => {
   const days = parseInt(req.query.days) || 1;
   const server = req.query.server;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
+  // 🔥 category가 guild거나, 길드 관련 키워드가 있는 메시지 모두 소환
   let query = `
     SELECT DISTINCT ON (message) character_name, message, date_send, server_name
     FROM horn
-    WHERE category = 'guild' AND date_send >= $1
+    WHERE (category = 'guild' OR message ~ '길드|길원|길모|성장') AND date_send >= $1
   `;
   const params = [since];
   if (server && server !== 'all') { params.push(server); query += ` AND server_name = $${params.length}`; }
@@ -228,28 +230,40 @@ app.get('/api/stats/guilds', async (req, res) => {
     const guildMap = {};
 
     rows.forEach(r => {
-      const match = r.message.match(/[\[\(【<「『](.*?)[\]\)】>」』]/) || r.message.match(/([가-힣a-zA-Z0-9]{2,10})\s*길드/);
-      const guildName = match ? match[1].replace(/채널\d+/, '').trim() : null;
+      let guildName = null;
+      // 1순위: [대괄호] 형태 길드명 추출
+      const bracketMatch = r.message.match(/[\[\(【<「『](.*?)[\]\)】>」』]/);
+      
+      if (bracketMatch) {
+        guildName = bracketMatch[1].replace(/채널\d+/, '').trim();
+      } else {
+        // 2순위: 'OOO에서', 'OOO 길드' 형태 추출
+        const textMatch = r.message.match(/([가-힣a-zA-Z0-9]{2,10})(?:에서| 길드)/);
+        if (textMatch) {
+          const word = textMatch[1];
+          // 🔥 '함께하실', '성장할' 처럼 '~실', '~는', '~할', '~운', '~고' 로 끝나는 동사/형용사 완벽 차단!
+          // 🔥 초보, 성인, 매너 등 너무 뻔한 수식어도 차단!
+          if (!/[실는할운고]$/.test(word) && !/초보|성인|매너|친목|신생|환영|모집|가입|성장|같이/.test(word)) {
+            guildName = word;
+          }
+        }
+      }
 
-      // 🔥 채널 번호 자동 추출 로직 추가
       const chMatch = r.message.match(/([0-9]+)\s*(?:채|ch)/i);
       const channel = chMatch ? chMatch[1] + '채널' : '채널 미상';
 
       if (guildName && guildName.length >= 2 && !/^\d+$/.test(guildName)) {
-        if (!guildMap[guildName]) {
-          guildMap[guildName] = { name: guildName, messages: [], server: r.server_name };
-        }
+        if (!guildMap[guildName]) guildMap[guildName] = { name: guildName, messages: [], server: r.server_name };
         if (guildMap[guildName].messages.length < 3) {
-          // 닉네임과 채널 데이터를 배열에 함께 저장
-          guildMap[guildName].messages.push({
-            text: r.message,
-            character: r.character_name,
-            channel: channel,
-            date: r.date_send
-          });
+          guildMap[guildName].messages.push({ text: r.message, character: r.character_name, channel: channel, date: r.date_send });
         }
       }
     });
+
+    const guilds = Object.values(guildMap).sort((a, b) => b.messages.length - a.messages.length).slice(0, 20);
+    res.json({ total: rows.length, guilds, raw: rows.slice(0, 50) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
     const guilds = Object.values(guildMap).sort((a, b) => b.messages.length - a.messages.length).slice(0, 20);
     res.json({ total: rows.length, guilds, raw: rows.slice(0, 50) });

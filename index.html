@@ -1131,9 +1131,10 @@
 </div>
 
 <nav>
-  <div class="nav-logo" onclick="showPage('feed')">지금 에린에서는</div>
+  <div class="nav-logo" onclick="showPage('lobby')">지금 에린에서는</div>
   <div class="nav-links">
-    <button class="nav-btn active" id="nav-feed" onclick="showPage('feed')">📯 실시간 피드</button>
+    <button class="nav-btn active" id="nav-lobby" onclick="showPage('lobby')">🏠 로비</button>
+    <button class="nav-btn" id="nav-feed" onclick="showPage('feed')">📯 실시간 피드</button>
     <button class="nav-btn" id="nav-analysis" onclick="showPage('analysis')">📊 분석</button>
     <button class="nav-btn" id="nav-keywords" onclick="showPage('keywords')">☁️ 키워드</button>
     <button class="nav-btn" id="nav-party" onclick="showPage('party')">🎮 파티 모집</button>
@@ -1155,18 +1156,43 @@
   </div>
 </nav>
 
-<div class="page active" id="page-feed">
+<div class="page active" id="page-lobby">
+  <div class="wrap">
+    <div class="page-header">
+      <div class="page-title">에린 요약 라운지</div>
+      <div class="page-sub">// 각 탭의 핵심 정보만 빠르게 훑어보세요</div>
+    </div>
+    
+    <div class="two-col">
+      <div class="chart-section">
+        <div class="section-title" onclick="showPage('feed')" style="cursor:pointer;">📯 방금 올라온 거뿔 (실시간) 〉</div>
+        <div id="lobbyFeed" style="display:flex; flex-direction:column; gap:8px;">
+          <div class="loading-row"><div class="spinner"></div> 거뿔 대기 중...</div>
+        </div>
+      </div>
+      <div class="chart-section">
+        <div class="section-title" onclick="showPage('market')" style="cursor:pointer;">💰 가장 최근 호가창 〉</div>
+        <div id="lobbyMarket" style="display:flex; flex-direction:column; gap:8px;">
+          <div class="loading-row"><div class="spinner"></div> 시장 분석 중...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-feed">
   <div class="wrap">
     <div class="page-header">
       <div class="page-title">실시간 피드</div>
-      <div class="page-sub">// 거대한 외침의 뿔피리 · 10초마다 자동 갱신</div>
+      <div class="page-sub">// 거대한 외침의 뿔피리 · 100초마다 자동 갱신</div>
     </div>
 
-    <div class="feed-controls">
-      <button class="btn btn-primary" id="startBtn" onclick="startFeed()">▶ 시작</button>
-      <button class="btn btn-stop" id="stopBtn" onclick="stopFeed()" style="display:none">■ 중지</button>
-      <button class="btn btn-ghost" onclick="clearFeed()">비우기</button>
-      <input class="filter-input" id="filterInput" placeholder="🔍 키워드 필터..." oninput="applyFilter()" />
+    <div class="feed-controls" style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px;">
+      <input class="filter-input" id="filterInput" placeholder="🔍 거뿔 내용 및 닉네임 검색..." oninput="applyFilter()" style="flex: 1;" />
+      <label style="font-size: 13px; color: var(--text2); display: flex; align-items: center; gap: 6px; cursor: pointer;">
+        <input type="checkbox" id="searchIncludeNick" checked onchange="applyFilter()" />
+        닉네임 포함 검색
+      </label>
       <div class="feed-meta" id="feedMeta"></div>
     </div>
 
@@ -1512,6 +1538,7 @@
     const div = document.createElement('div');
     div.className = 'feed-item' + (isNew ? ' is-new' : '');
     div.dataset.msg = item.message.toLowerCase();
+    div.dataset.nick = item.character_name.toLowerCase();
     div.innerHTML = `
       <div class="avatar">${getAvatar(item.character_name)}</div>
       <div class="feed-body">
@@ -1607,9 +1634,30 @@
 
   function applyFilter() {
     const kw = document.getElementById('filterInput').value.toLowerCase().trim();
+    const includeNick = document.getElementById('searchIncludeNick').checked;
+    
     document.querySelectorAll('.feed-item').forEach(el => {
-      el.style.display = (!kw || el.dataset.msg.includes(kw)) ? '' : 'none';
+      const msg = el.dataset.msg;
+      const nick = el.dataset.nick;
+      const textToSearch = includeNick ? (msg + ' ' + nick) : msg;
+      el.style.display = (!kw || textToSearch.includes(kw)) ? '' : 'none';
     });
+    
+    // 🔥 피드가 업데이트 될 때마다 로비의 '최근 거뿔'에 3개 복사해서 보여줌!
+    const lobbyFeed = document.getElementById('lobbyFeed');
+    const items = Array.from(document.querySelectorAll('#feed .feed-item')).slice(0, 3);
+    if(items.length > 0) {
+      lobbyFeed.innerHTML = items.map(el => el.outerHTML).join('');
+    }
+  }
+
+  // 🔥 시장 시세가 로드될 때 로비의 '최근 시세'에 3개 복사해서 보여줌!
+  function updateLobbyMarket() {
+    const lobbyMarket = document.getElementById('lobbyMarket');
+    const items = Array.from(document.querySelectorAll('#marketList .market-item')).slice(0, 3);
+    if(items.length > 0) {
+      lobbyMarket.innerHTML = items.map(el => el.outerHTML).join('');
+    }
   }
 
   // ════════════════════════════════
@@ -1975,6 +2023,7 @@
         </div>
       `;
     }).join('');
+    updateLobbyMarket(); // 🔥 시장 목록 그려질 때 로비도 업데이트!
   }
 
   // ════════════════════════════════
