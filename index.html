@@ -1197,11 +1197,7 @@
     </div>
 
     <div id="feed">
-      <div class="empty-state">
-        <div class="empty-icon">📯</div>
-        <div class="empty-title">에린의 목소리를 기다리는 중</div>
-        <div class="empty-sub">▶ 시작 버튼을 누르면<br>실시간 뿔피리가 여기 나타나요</div>
-      </div>
+      <div class="loading-row"><div class="spinner"></div> 실시간 뿔피리 연결 중...</div>
     </div>
   </div>
 </div>
@@ -1606,29 +1602,17 @@
   }
 
   function startFeed() {
-    document.getElementById('startBtn').style.display = 'none';
-    document.getElementById('stopBtn').style.display = '';
-    document.getElementById('feed').innerHTML = '<div class="loading-row"><div class="spinner"></div> 불러오는 중...</div>';
+    // 🔥 없어진 버튼을 조작하려다 에러 나는 코드 삭제 완료!
+    document.getElementById('feed').innerHTML = '<div class="loading-row"><div class="spinner"></div> 거뿔을 불러오는 중...</div>';
     fetchFeed();
     feedInterval = setInterval(fetchFeed, 10000);
   }
 
-  function stopFeed() {
-    clearInterval(feedInterval);
-    feedInterval = null;
-    document.getElementById('startBtn').style.display = '';
-    document.getElementById('stopBtn').style.display = 'none';
-    setGlobalStatus('idle', '중지됨');
-  }
+  // (stopFeed는 이제 안 쓰므로 지웠습니다)
 
   function clearFeed() {
     seenKeys = new Set();
-    document.getElementById('feed').innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">📯</div>
-        <div class="empty-title">피드가 비워졌어요</div>
-        <div class="empty-sub">▶ 시작 버튼을 누르면 다시 나타나요</div>
-      </div>`;
+    document.getElementById('feed').innerHTML = '<div class="loading-row"><div class="spinner"></div> 새로운 뿔피리를 기다리는 중...</div>';
     document.getElementById('feedMeta').innerHTML = '';
   }
 
