@@ -1447,18 +1447,12 @@
       clearFeed();
       startFeed();
     }
-    if (document.getElementById('page-analysis').classList.contains('active')) {
-      loadAnalysis();
-    }
-    if (document.getElementById('page-keywords').classList.contains('active')) {
-      loadKeywords();
-    }
-    if (document.getElementById('page-party').classList.contains('active')) {
-      loadParty();
-      if (document.getElementById('page-market') && document.getElementById('page-market').classList.contains('active')) {
-      loadMarket();
-      }
-    }
+    if (document.getElementById('page-analysis').classList.contains('active')) loadAnalysis();
+    if (document.getElementById('page-keywords').classList.contains('active')) loadKeywords();
+    if (document.getElementById('page-party').classList.contains('active')) loadParty();
+    
+    // 🔥 괄호 감옥 탈출! 이제 서버를 바꾸면 시세 탭도 바로바로 자동 새로고침됩니다.
+    if (document.getElementById('page-market') && document.getElementById('page-market').classList.contains('active')) loadMarket();
   }
 
   function getServer() { return document.getElementById('globalServer').value; }
