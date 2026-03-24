@@ -1501,20 +1501,25 @@
   }
 
   // ── 거뿔 왕 로드 ──
-  async function loadHornKings() {
+  aasync function loadHornKings() {
     try {
       const res = await fetch(`${API}/api/stats/horn-king`);
       const data = await res.json();
       const servers = ['류트', '만돌린', '하프', '울프'];
+      
       servers.forEach(server => {
         const el = document.getElementById(`king-${server}`);
         if (!el) return;
-        if (data[server]) {
+        
+        if (data[server] && data[server].count > 0) {
           el.innerHTML = `<div class="server-btn-king-label">👑 오늘의 거뿔 왕</div>${data[server].masked}님 (${data[server].count}회)`;
+        } else {
+          // 데이터가 아직 안 모였을 때 빈칸 대신 띄워줄 문구
+          el.innerHTML = `<div class="server-btn-king-label">👑 오늘의 거뿔 왕</div><span style="color:var(--text3);font-size:11px;">데이터 수집 중...</span>`;
         }
       });
     } catch (e) {
-      // 거뿔 왕 로드 실패 시 조용히 무시
+      console.error("거뿔왕 로드 실패:", e);
     }
   }
 
