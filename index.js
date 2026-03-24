@@ -87,10 +87,14 @@ async function fetchServer(serverName) {
 }
 
 async function fetchAll() {
-  for (const server of SERVERS) {
-    await fetchServer(server);
-    await new Promise(r => setTimeout(r, 1000)); // 429 방지용 1초 휴식
-  }
+  const promises = SERVERS.map(async (server) => {
+    try {
+      await fetchServer(server);
+    } catch (e) {
+      console.error(`[${server}] 개별 수집 실패:`, e.message);
+    }
+  });
+  await Promise.all(promises);
 }
 
 // ── API 엔드포인트 생략 (기존 코드와 동일하게 유지) ──
@@ -201,8 +205,7 @@ app.get('/api/stats/hall-of-fame', async (req, res) => {
 app.get('/api/stats/horn-king', async (req, res) => {
   try {
     const kings = {};
-    for (const server of SERVERS) {
-      // 🔥 DB 시간대 충돌을 100% 방지하는 가장 안전한 KST 날짜 비교 쿼리
+    const promises = SERVERS.map(async (server) => {
       const result = await pool.query(`
         SELECT character_name, COUNT(*) as count 
         FROM horn 
@@ -215,13 +218,20 @@ app.get('/api/stats/horn-king', async (req, res) => {
       
       if (result.rows.length > 0) {
         const name = result.rows[0].character_name;
-        kings[server] = { masked: name.length <= 2 ? name[0] + 'X' : name.slice(0, 2) + 'X'.repeat(name.length - 2), count: parseInt(result.rows[0].count) };
+        kings[server] = { 
+          masked: name.length <= 2 ? name[0] + 'X' : name.slice(0, 2) + 'X'.repeat(name.length - 2), 
+          count: parseInt(result.rows[0].count) 
+        };
       } else {
         kings[server] = { masked: '조용한 에린', count: 0 };
       }
-    }
+    });
+
+    await Promise.all(promises);
     res.json(kings);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 
