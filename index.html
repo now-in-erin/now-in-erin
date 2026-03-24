@@ -1856,11 +1856,19 @@
       `<div class="party-total-badge">🎮 총 파티 모집 메시지 <strong>${data.total}건</strong></div>`;
 
     const grid = document.getElementById('partyGrid');
+    
     grid.innerHTML = (data.dungeons || []).map(d => {
       const cls = DUNGEON_COLOR[d.color] || 'd-etc';
-      const recentHtml = d.recent.slice(0,3).map(r =>
-        `<div class="dungeon-recent-item">📯 ${r.message}</div>`
-      ).join('');
+      const recentHtml = d.recent.slice(0,3).map(r => {
+        // 🔥 초 단위까지 정확히 나오는 [19:30:15] 시간 표시
+        const dObj = new Date(r.date);
+        const hh = String(dObj.getHours()).padStart(2, '0');
+        const mm = String(dObj.getMinutes()).padStart(2, '0');
+        const ss = String(dObj.getSeconds()).padStart(2, '0');
+        
+        return `<div class="dungeon-recent-item"><span style="color:var(--text3); margin-right:4px;">[${hh}:${mm}:${ss}]</span>📯 ${r.message}</div>`;
+      }).join('');
+      
       return `
         <div class="dungeon-card ${cls}">
           <div class="dungeon-name">${d.name}</div>

@@ -319,30 +319,35 @@ app.get('/api/stats/party', async (req, res) => {
   
   try {
     const result = await pool.query(query, params);
+    
+    // 오리지널 카테고리 완벽 복구
     const dungeons = {
       '브리레흐': { count: 0, recent: [], color: 'blue' },
       '크롬바스': { count: 0, recent: [], color: 'red' },
       '글렌베르나': { count: 0, recent: [], color: 'teal' },
       '몽환의 라비': { count: 0, recent: [], color: 'purple' },
-      '교역': { count: 0, recent: [], color: 'gold' }, // 교역 추가
+      '교역': { count: 0, recent: [], color: 'gold' },
       '기타': { count: 0, recent: [], color: 'etc' }
     };
     const memberPatterns = {};
     
     result.rows.forEach(r => {
       let key = '기타';
-      if (/브리|브레/.test(r.message)) key = '브리레흐';
-      else if (/크롬|크일|크쉬/.test(r.message)) key = '크롬바스';
-      else if (/글렌|글매|글쉬/.test(r.message)) key = '글렌베르나';
-      else if (/몽라|몽환/.test(r.message)) key = '몽환의 라비';
-      else if (/필-발|왕복|필리아|코르|발레스|켈-발|항교|교역/.test(r.message)) key = '교역'; // 교역 조건식 추가
+      const msg = r.message;
+      
+      // 깔끔한 분류 조건식
+      if (/브리|브레|1-3관/.test(msg)) key = '브리레흐';
+      else if (/크롬|크일|크쉬/.test(msg)) key = '크롬바스';
+      else if (/글렌|글매|글쉬/.test(msg)) key = '글렌베르나';
+      else if (/몽라|몽환/.test(msg)) key = '몽환의 라비';
+      else if (/필-발|왕복|필리아|코르|발레스|켈-발|항교|교역/.test(msg)) key = '교역';
       
       dungeons[key].count++;
       if (dungeons[key].recent.length < 3) {
-        dungeons[key].recent.push({ message: r.message, date: r.date_send });
+        dungeons[key].recent.push({ message: msg, date: r.date_send });
       }
 
-      const m = r.message.match(/([0-9])\/([0-9])/);
+      const m = msg.match(/([0-9])\/([0-9])/);
       if (m) {
         const p = `${m[1]} / ${m[2]}`;
         memberPatterns[p] = (memberPatterns[p] || 0) + 1;
