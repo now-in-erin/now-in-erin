@@ -313,14 +313,19 @@ app.get('/api/stats/keywords', async (req, res) => {
 app.get('/api/stats/party', async (req, res) => {
   const { server, days } = req.query;
   const since = new Date(Date.now() - (parseInt(days) || 1) * 24 * 60 * 60 * 1000).toISOString();
-  let query = `SELECT message, date_send FROM horn WHERE category = 'party' AND date_send >= $1 ORDER BY date_send DESC`;
+  
+  let query = `SELECT message, date_send FROM horn WHERE category = 'party' AND date_send >= $1`;
   const params = [since];
-  if (server && server !== 'all') { params.push(server); query += ` AND server_name = $${params.length}`; }
+  
+  if (server && server !== 'all') { 
+    params.push(server); 
+    query += ` AND server_name = $${params.length}`; 
+  }
+  // 🔥 에러의 주범! 정렬 구문을 반드시 WHERE 절이 다 끝난 맨 뒤에 붙여야 합니다.
+  query += ` ORDER BY date_send DESC`; 
   
   try {
     const result = await pool.query(query, params);
-    
-    // 오리지널 카테고리 완벽 복구
     const dungeons = {
       '브리레흐': { count: 0, recent: [], color: 'blue' },
       '크롬바스': { count: 0, recent: [], color: 'red' },
@@ -329,13 +334,11 @@ app.get('/api/stats/party', async (req, res) => {
       '교역': { count: 0, recent: [], color: 'gold' },
       '기타': { count: 0, recent: [], color: 'etc' }
     };
-    const memberPatterns = {};
     
     result.rows.forEach(r => {
       let key = '기타';
       const msg = r.message;
       
-      // 깔끔한 분류 조건식
       if (/브리|브레|1-3관/.test(msg)) key = '브리레흐';
       else if (/크롬|크일|크쉬/.test(msg)) key = '크롬바스';
       else if (/글렌|글매|글쉬/.test(msg)) key = '글렌베르나';
@@ -346,14 +349,9 @@ app.get('/api/stats/party', async (req, res) => {
       if (dungeons[key].recent.length < 3) {
         dungeons[key].recent.push({ message: msg, date: r.date_send });
       }
-
-      const m = msg.match(/([0-9])\/([0-9])/);
-      if (m) {
-        const p = `${m[1]} / ${m[2]}`;
-        memberPatterns[p] = (memberPatterns[p] || 0) + 1;
-      }
     });
-    res.json({ total: result.rows.length, dungeons: Object.entries(dungeons).map(([name, info]) => ({ name, ...info })), memberPatterns });
+    
+    res.json({ total: result.rows.length, dungeons: Object.entries(dungeons).map(([name, info]) => ({ name, ...info })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

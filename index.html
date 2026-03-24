@@ -44,6 +44,22 @@
       z-index: 0;
     }
 
+    /* ── 거뿔 거래 시세 ── */
+.market-list { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+.market-item { display: flex; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
+.market-item:last-child { border-bottom: none; }
+.market-item:hover { background: var(--surface2); }
+.market-info { flex: 1; }
+.market-item-name { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.market-meta { font-size: 12px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+.market-price-col { text-align: right; }
+.market-price { font-size: 20px; font-weight: 900; font-family: 'JetBrains Mono', monospace; }
+.market-action { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-top: 4px; }
+.action-sell .market-price { color: var(--blue); }
+.action-sell .market-action { background: rgba(37,99,235,0.1); color: var(--blue); }
+.action-buy .market-price { color: var(--red); }
+.action-buy .market-action { background: rgba(220,38,38,0.1); color: var(--red); }
+
     /* ── 네비게이션 ── */
     nav {
       position: fixed;
@@ -1101,6 +1117,7 @@
     <button class="nav-btn" id="nav-analysis" onclick="showPage('analysis')">📊 분석</button>
     <button class="nav-btn" id="nav-keywords" onclick="showPage('keywords')">☁️ 키워드</button>
     <button class="nav-btn" id="nav-party" onclick="showPage('party')">🎮 파티 모집</button>
+    <button class="nav-btn" id="nav-market" onclick="showPage('market')">💰 거뿔 거래 시세</button>
     <button class="nav-btn" id="nav-user" onclick="showPage('user')">🔍 유저 분석</button>
   </div>
   <div class="nav-right">
@@ -1289,9 +1306,22 @@
     <div class="party-grid" id="partyGrid">
       <div class="placeholder" style="height:200px;grid-column:1/-1"><div class="spinner"></div><span>로딩 중...</span></div>
     </div>
-    <div class="chart-section">
-      <div class="section-title">모집 인원 패턴</div>
-      <div class="member-chart-wrap"><canvas id="memberChart"></canvas></div>
+<div class="page" id="page-market">
+  <div class="wrap">
+    <div class="page-header">
+      <div class="page-title">거뿔 거래 시세</div>
+      <div class="page-sub">// 뿔피리로 거래되는 아이템 실시간 호가창</div>
+    </div>
+    <div class="keyword-controls">
+      <input class="filter-input" id="marketSearch" placeholder="🔍 아이템명 검색 (예: 붕마정, 고독한)..." oninput="filterMarket()" />
+      <button class="btn btn-primary" onclick="loadMarket()">↻ 새로고침</button>
+      <span class="keyword-status" id="marketStatus"></span>
+    </div>
+    <div class="market-list" id="marketList">
+      <div class="loading-row"><div class="spinner"></div> 시세 데이터 분석 중...</div>
+    </div>
+  </div>
+</div>
     </div>
   </div>
 </div>
@@ -1319,6 +1349,7 @@
   let isScrolledDown = false;
   let newMsgCount = 0;
   let hourChart = null, donutChart = null, lineChart = null;
+  let marketData = []; // 🔥 거래 시세 데이터 저장용
 
   Chart.defaults.color = '#8891aa';
   Chart.defaults.font = { family: 'JetBrains Mono, Noto Sans KR, sans-serif', size: 11 };
@@ -1406,6 +1437,7 @@
     if (name === 'analysis') loadAnalysis();
     if (name === 'keywords') loadKeywords();
     if (name === 'party') loadParty();
+    if (name === 'market') loadMarket();
   }
 
   // ── 서버 변경 ──
@@ -1424,6 +1456,9 @@
     }
     if (document.getElementById('page-party').classList.contains('active')) {
       loadParty();
+      if (document.getElementById('page-market') && document.getElementById('page-market').classList.contains('active')) {
+      loadMarket();
+      }
     }
   }
 
@@ -1576,7 +1611,7 @@
     // 🔥 요약 데이터도 함께 호출
     loadDailySummary(); 
     loadHallOfFame();
-    loadHornkings(); //
+    loadHornKings(); //
 
     document.getElementById('analysisStatus').textContent = '로딩 중...';
 
@@ -1911,6 +1946,51 @@
     if (document.getElementById('page-party').classList.contains('active')) loadParty();
   }, 120000);
 
+  // 🔥 거뿔 거래 시세 탭 로직
+  async function loadMarket() {
+    const server = getServer();
+    document.getElementById('marketStatus').textContent = '로딩 중...';
+    try {
+      const res = await fetch(`${API}/api/stats/market?server=${server}&days=3`);
+      const data = await res.json();
+      marketData = data.trades || [];
+      renderMarket();
+      document.getElementById('marketStatus').textContent = `갱신: ${new Date().toLocaleTimeString('ko-KR')} · ${marketData.length}건 발골 완료`;
+    } catch(e) {
+      document.getElementById('marketStatus').textContent = '서버 연결 실패';
+    }
+  }
+
+  function filterMarket() { renderMarket(); }
+
+  function renderMarket() {
+    const list = document.getElementById('marketList');
+    const kw = document.getElementById('marketSearch').value.trim().toLowerCase();
+    const filtered = marketData.filter(t => t.item.toLowerCase().includes(kw));
+    
+    if(filtered.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">💸</div><div class="empty-title">거래 내역이 없어요</div></div>';
+      return;
+    }
+    
+    list.innerHTML = filtered.map(t => {
+      const isSell = t.action === '판매';
+      const timeStr = new Date(t.time).toLocaleString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+      return `
+        <div class="market-item action-${isSell ? 'sell' : 'buy'}">
+          <div class="market-info">
+            <div class="market-item-name">${t.item}</div>
+            <div class="market-meta">📡 ${t.server} · 👤 ${t.character} · ⏰ ${timeStr}</div>
+          </div>
+          <div class="market-price-col">
+            <div class="market-price">${t.price.toLocaleString()}${t.unit}</div>
+            <div class="market-action">${isSell ? '팝니다' : '삽니다'}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   // ════════════════════════════════
   //  키워드
   // ════════════════════════════════
@@ -2084,8 +2164,8 @@
 
   // 2분마다 키워드/분석 자동 새로고침
   setInterval(() => {
-    if (document.getElementById('page-keywords').classList.contains('active')) loadKeywords();
-    if (document.getElementById('page-analysis').classList.contains('active')) loadAnalysis();
+    if (document.getElementById('page-party').classList.contains('active')) loadParty();
+    if (document.getElementById('page-market') && document.getElementById('page-market').classList.contains('active')) loadMarket(); // 🔥 시세 탭 추가
   }, 120000);
 
   // 초기 실행
