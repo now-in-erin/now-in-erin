@@ -206,7 +206,7 @@ app.get('/api/stats/horn-king', async (req, res) => {
   try {
     const kings = {};
     for (const server of SERVERS) {
-      const result = await pool.query(`SELECT character_name, COUNT(*) as count FROM horn WHERE server_name = $1 AND date_send::timestamptz >= NOW() - INTERVAL '24 hours' GROUP BY character_name ORDER BY count DESC LIMIT 1`, [server]);
+      cconst result = await pool.query(`SELECT character_name, COUNT(*) as count FROM horn WHERE server_name = $1 AND DATE(CAST(date_send AS TIMESTAMP WITH TIME ZONE) AT TIME ZONE 'Asia/Seoul') = CURRENT_DATE AT TIME ZONE 'Asia/Seoul' GROUP BY character_name ORDER BY count DESC LIMIT 1`, [server]);
       if (result.rows.length > 0) {
         const name = result.rows[0].character_name;
         kings[server] = { masked: name.length <= 2 ? name[0] + 'X' : name.slice(0, 2) + 'X'.repeat(name.length - 2), count: parseInt(result.rows[0].count) };
@@ -483,7 +483,7 @@ app.get('/api/stats/blackmarket', async (req, res) => {
     
     // 🔥 작가님 기획 아이템 5대장
     const trends = {
-      '브리 구슬(뀨)': { prices: [] },
+      '브리 구슬': { prices: [] },
       '인능상': { prices: [] },
       '거불 인보포': { prices: [] },
       '거불 시암': { prices: [] },
@@ -496,7 +496,7 @@ app.get('/api/stats/blackmarket', async (req, res) => {
 
       // 1. 브리 구슬 (뀨, 구구, 구슬구매, 거불구슬) + 뒤에 숫자(가격)
       const beadMatch = msg.match(/(뀨|구구|구슬구매|거불구슬)(\d+)(숲|만)?/);
-      if (beadMatch) trends['브리 구슬(뀨)'].prices.push({ time: r.date_send, price: parseInt(beadMatch[2]) });
+      if (beadMatch) trends['브리 구슬'].prices.push({ time: r.date_send, price: parseInt(beadMatch[2]) });
 
       // 2. 인능상
       const inMatch = msg.match(/(인능상|인챈트능력의상승스크롤)(\d+)(숲|만)?/);

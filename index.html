@@ -1662,52 +1662,155 @@
     return div;
   }
 
-  async function fetchFeed() {
+  // ==========================================
+  // 📯 실시간 피드 (무한 스크롤 & 30일 딥서치)
+  // ==========================================
+  let isFetchingFeed = false;
+  let lastFeedKeyword = '';
+
+  function executeFeedSearch() {
+    lastFeedKeyword = document.getElementById('filterInput').value.trim();
+    document.getElementById('feed').innerHTML = '<div class="loading-row"><div class="spinner"></div> DB에서 30일치 거뿔 뒤지는 중...</div>';
+    seenKeys.clear();
+    fetchFeed(false);
+  }
+
+  async function fetchFeed(isLoadMore = false) {
+    if (isFetchingFeed) return;
+    isFetchingFeed = true;
+
     const server = getServer();
     const params = new URLSearchParams({ limit: 100 });
     if (server !== 'all') params.set('server', server);
-    params.set('_t', Date.now());
+    if (lastFeedKeyword) params.set('keyword', lastFeedKeyword);
+
+    const feed = document.getElementById('feed');
+    if (isLoadMore) {
+      params.set('offset', feed.querySelectorAll('.feed-item').length); // 스크롤 내린 만큼 건너뛰고 가져오기
+    } else {
+      params.set('_t', Date.now());
+    }
 
     try {
       const res = await fetch(`${API}/api/feed?${params}`);
       const data = await res.json();
       const items = data.items || [];
-      const feed = document.getElementById('feed');
 
-      if (seenKeys.size === 0 && items.length > 0) {
-        feed.innerHTML = '';
-        items.forEach(item => {
-          seenKeys.add(makeKey(item));
-          feed.appendChild(renderFeedItem(item, false));
-        });
-      } else {
-        const newItems = items.filter(item => !seenKeys.has(makeKey(item)));
-        if (newItems.length > 0) {
-          const empty = feed.querySelector('.empty-state');
-          if (empty) empty.remove();
+      if (!isLoadMore && seenKeys.size === 0) feed.innerHTML = '';
+      const empty = feed.querySelector('.empty-state'); if (empty) empty.remove();
+      const loading = feed.querySelector('.loading-row'); if (loading && !isLoadMore) loading.remove();
 
-          const div = document.createElement('div');
-          div.className = 'divider';
-          div.textContent = `— ${formatTime(new Date().toISOString())} —`;
-          feed.insertBefore(div, feed.firstChild);
-
-          newItems.forEach(item => {
-            seenKeys.add(makeKey(item));
-            feed.insertBefore(renderFeedItem(item, true), feed.firstChild);
-          });
+      items.forEach(item => {
+        const key = makeKey(item);
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          if (isLoadMore) feed.appendChild(renderFeedItem(item, false));
+          else feed.insertBefore(renderFeedItem(item, true), feed.firstChild);
         }
-      }
+      });
 
-      const all = feed.querySelectorAll('.feed-item');
-      if (all.length > 300) for (let i = 300; i < all.length; i++) all[i].remove();
-
-      document.getElementById('feedMeta').innerHTML = `총 <span>${feed.querySelectorAll('.feed-item').length}</span>개`;
-      applyFilter();
-      const nowTime = new Date().toLocaleTimeString('ko-KR');
-      setGlobalStatus('live', `연결됨 (${nowTime} 갱신)`);
+      // 300개 제한 풀고 무한으로 쌓이게 냅둠!
+      document.getElementById('feedMeta').innerHTML = `총 <span>${feed.querySelectorAll('.feed-item').length}</span>개 표시 중`;
     } catch (e) {
       setGlobalStatus('error', '서버 오류');
+    } finally {
+      isFetchingFeed = false;
     }
+  }
+
+  // 🔥 마우스 휠 쭉쭉 내리면 무한 로딩
+  window.addEventListener('scroll', () => {
+    if (document.getElementById('page-feed').classList.contains('active')) {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 400) {
+        fetchFeed(true);
+      }
+    }
+  });
+
+
+  // ==========================================
+  // 💰 어둠의 거래소 & 그 외 거래 (중복 압축!)
+  // ==========================================
+  async function loadBlackMarket() {
+    const server = getServer();
+    try {
+      const res = await fetch(`${API}/api/stats/blackmarket?server=${server}`);
+      const data = await res.json();
+      const cardsWrap = document.getElementById('blackMarketCards');
+
+      if (Object.keys(data).length === 0) {
+        cardsWrap.innerHTML = '<div class="empty-state">최근 거래 내역이 없습니다</div>';
+        return;
+      }
+
+      // 🔥 그래프 날리고 누르면 바로 검색되는 힙한 '버튼'으로 변신!
+      cardsWrap.innerHTML = Object.entries(data).sort((a,b)=>b[1].count - a[1].count).map(([name, info]) => `
+        <div style="flex:1; min-width:180px; background:var(--surface2); border:1px solid var(--border); padding:12px 16px; border-radius:12px; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.borderColor='var(--gold)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)'; this.style.transform='none'" onclick="setMarketSearch('${name}')">
+          <div style="font-weight:900; font-size:15px; color:var(--text); margin-bottom:4px;">🔎 ${name}</div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+            <div style="color:var(--gold); font-weight:900; font-family:'JetBrains Mono', monospace; font-size:18px;">${info.avg}숲</div>
+            <div style="font-size:11px; color:var(--text3);">최근 ${info.count}건</div>
+          </div>
+        </div>`).join('');
+    } catch (e) {
+      document.getElementById('blackMarketCards').innerHTML = '<div class="empty-state">오류 발생</div>';
+    }
+  }
+
+  function setMarketSearch(keyword) {
+    document.getElementById('marketSearch').value = keyword;
+    filterMarket();
+  }
+
+  function filterMarket() { renderMarket(); }
+
+  // 🔥 그 외 거래 (중복된 혐사 거뿔, 매크로 거뿔 하나로 압축해버리기!)
+  function renderMarket() {
+    const list = document.getElementById('marketList');
+    const kw = document.getElementById('marketSearch').value.trim().toLowerCase();
+    const filtered = marketData.filter(t => t.item.toLowerCase().includes(kw));
+    
+    if(filtered.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">💸</div><div class="empty-title">거래 내역이 없어요</div></div>';
+      return;
+    }
+
+    const grouped = {};
+    filtered.forEach(t => {
+      // 캐릭터명 + 아이템 + 가격 + 행동(팝/삽)이 같으면 전부 한 몸으로 취급
+      const key = `${t.character}_${t.item}_${t.price}_${t.action}`;
+      if(!grouped[key]) {
+        grouped[key] = { ...t, count: 1, originalList: [t.original] };
+      } else {
+        grouped[key].count++;
+        if (!grouped[key].originalList.includes(t.original)) {
+          grouped[key].originalList.push(t.original);
+        }
+      }
+    });
+
+    list.innerHTML = Object.values(grouped).map(t => {
+      const isSell = t.action === '판매';
+      const timeStr = new Date(t.time).toLocaleString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+      // 중복 횟수 뱃지
+      const badge = t.count > 1 ? `<span style="background:var(--red); color:#fff; padding:2px 6px; border-radius:10px; font-size:10px; margin-left:6px; vertical-align:middle;">x${t.count}</span>` : '';
+      // 원본 텍스트 전부 묶어주기
+      const allOriginals = t.originalList.join('<br>📯 ');
+
+      return `
+        <div class="market-item action-${isSell ? 'sell' : 'buy'}">
+          <div class="market-info">
+            <div class="market-item-name">${t.item} ${badge}</div>
+            <div class="market-meta">📡 ${t.server} · 👤 ${t.character} · ⏰ 최근 ${timeStr}</div>
+            <div class="market-original">📯 ${allOriginals}</div>
+          </div>
+          <div class="market-price-col">
+            <div class="market-price">${t.price.toLocaleString()}${t.unit}</div>
+            <div class="market-action">${isSell ? '팝니다' : '삽니다'}</div>
+          </div>
+        </div>`;
+    }).join('');
+    updateLobbyMarket();
   }
 
   function startFeed() {
