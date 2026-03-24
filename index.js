@@ -206,18 +206,22 @@ app.get('/api/stats/horn-king', async (req, res) => {
   try {
     const kings = {};
     for (const server of SERVERS) {
+      // 🔥 DB 시간대 충돌을 100% 방지하는 가장 안전한 KST 날짜 비교 쿼리
       const result = await pool.query(`
         SELECT character_name, COUNT(*) as count 
         FROM horn 
         WHERE server_name = $1 
-          AND date_send AT TIME ZONE 'Asia/Seoul' >= date_trunc('day', now() AT TIME ZONE 'Asia/Seoul')
+          AND (date_send AT TIME ZONE 'Asia/Seoul')::date = (NOW() AT TIME ZONE 'Asia/Seoul')::date
         GROUP BY character_name 
         ORDER BY count DESC 
         LIMIT 1
       `, [server]);
+      
       if (result.rows.length > 0) {
         const name = result.rows[0].character_name;
         kings[server] = { masked: name.length <= 2 ? name[0] + 'X' : name.slice(0, 2) + 'X'.repeat(name.length - 2), count: parseInt(result.rows[0].count) };
+      } else {
+        kings[server] = { masked: '조용한 에린', count: 0 };
       }
     }
     res.json(kings);
