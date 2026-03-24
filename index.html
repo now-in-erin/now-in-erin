@@ -1909,34 +1909,6 @@
           <div class="dungeon-recent">${recentHtml || '<div style="font-size:11px;color:var(--text3);">최근 모집 없음</div>'}</div>
         </div>`;
     }).join('');
-    // 🔥 에러의 주범이었던 renderMemberChart() 호출 코드 삭제 완료!
-  }
-
-  function renderMemberChart(patterns) {
-    const labels = Object.keys(patterns);
-    const values = Object.values(patterns);
-    const el = document.getElementById('memberChart');
-    if (memberChart) memberChart.destroy();
-    memberChart = new Chart(el, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          data: values,
-          backgroundColor: ['#5b8dee','#4ecdc4','#a78bfa','#e8c96a','#f87171','#34d399','#fb923c','#e879f9'],
-          borderRadius: 6,
-          borderWidth: 0,
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend:{display:false}, tooltip:{callbacks:{label:c=>` ${c.raw}건`}} },
-        scales: {
-          x: { grid:{color:'rgba(0,0,0,0.05)'}, ticks:{color:'#4d5470'} },
-          y: { grid:{color:'rgba(0,0,0,0.05)'}, ticks:{color:'#4d5470'}, beginAtZero:true }
-        }
-      }
-    });
   }
 
   setInterval(() => {

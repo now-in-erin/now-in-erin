@@ -288,7 +288,7 @@ app.get('/api/admin/force-summary', async (req, res) => {
   res.send('✅ 어제 데이터 강제 정산 완료! 새로고침 해보세요.');
 });
 
-// ── 🔥 키워드 트렌드 통계 API (최종 방어선 구축 완료) ──
+// ── 🔥 키워드 트렌드 통계 API (불용어 및 '~요', '뭉' 완벽 필터링) ──
 app.get('/api/stats/keywords', async (req, res) => {
   const { server, category, days } = req.query;
   const since = new Date(Date.now() - (parseInt(days) || 1) * 24 * 60 * 60 * 1000).toISOString();
