@@ -200,18 +200,20 @@ app.get('/api/stats/hall-of-fame', async (req, res) => {
 app.get('/api/stats/horn-king', async (req, res) => {
   try {
     const kings = {};
-    // 🔥 루프 대신 병렬로 돌려야 서버별 속도 영향이 없습니다.
+    
+    // 🔥 KST 기준 오늘 자정(00:00:00) 문자열을 JS에서 강제 생성! DB 에러 원천 차단!
+    const nowKST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
+    const todayStr = `${nowKST.getFullYear()}-${String(nowKST.getMonth() + 1).padStart(2, '0')}-${String(nowKST.getDate()).padStart(2, '0')} 00:00:00+09`;
+
     await Promise.all(SERVERS.map(async (server) => {
-      // 🔥 날짜 자르는 방식 대신, 한국 자정 시점을 정확히 계산해서 비교합니다.
       const result = await pool.query(`
         SELECT character_name, COUNT(*) as count 
         FROM horn 
-        WHERE server_name = $1 
-          AND date_send >= CURRENT_DATE AT TIME ZONE 'Asia/Seoul'
+        WHERE server_name = $1 AND date_send >= $2
         GROUP BY character_name 
         ORDER BY count DESC 
         LIMIT 1
-      `, [server]);
+      `, [server, todayStr]);
       
       if (result.rows.length > 0) {
         const name = result.rows[0].character_name;
@@ -329,18 +331,25 @@ app.get('/api/stats/keywords', async (req, res) => {
   if (category && category !== 'all') { params.push(category); query += ` AND category = $${params.length}`; }
   
   try {
-    const result = await pool.query(query, params);
-    const nicknames = new Set(result.rows.map(r => r.character_name));
-    const freq = {};
-    
-    // 다단어 묶기
-    const MULTI_WORDS = {
-      '심판의 칼날': '심판의칼날', '파멸의 로브': '파멸의로브',
-      '나이트 브링어': '나이트브링어', '태양과 달의 검': '태달검'
-    };
+      const result = await pool.query(query, params);
+      const nicknames = new Set(result.rows.map(r => r.character_name));
+      const freq = {};
+      
+      const MULTI_WORDS = {
+        '심판의 칼날': '심판의칼날', '파멸의 로브': '파멸의로브',
+        '나이트 브링어': '나이트브링어', '태양과 달의 검': '태달검'
+      };
 
-    result.rows.forEach(r => {
-      let msg = r.message;
+      // 🔥 추가: 도배 방지용 기억 장치 (키워드 탭에서만 작동함!)
+      const uniqueMessages = new Set();
+
+      result.rows.forEach(r => {
+        // 🔥 추가: 닉네임과 내용이 완전히 똑같으면 키워드 집계에서는 쿨하게 패스
+        const dupKey = `${r.character_name}_${r.message}`;
+        if (uniqueMessages.has(dupKey)) return;
+        uniqueMessages.add(dupKey);
+
+        let msg = r.message;
 
       for (const [key, val] of Object.entries(MULTI_WORDS)) {
         msg = msg.replace(new RegExp(key, 'g'), val);
