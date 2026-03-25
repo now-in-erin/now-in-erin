@@ -251,31 +251,33 @@ app.get('/api/stats/guilds', async (req, res) => {
 
     rows.forEach(r => {
       let guildName = null;
-      // 1순위: [대괄호] 형태 길드명 추출
-      const bracketMatch = r.message.match(/[\[\(【<「『](.*?)[\]\)】>」』]/);
+      
+      // 🔥 1. 마비노기 시스템이 강제로 붙인 '&<' '&>' 껍데기를 예쁜 대괄호로 정화!
+      let cleanMsg = r.message.replace(/&<(.*?)&>/, '[$1]');
+      
+      // 🔥 2. 정화된 cleanMsg를 기준으로 길드명을 추출합니다. (r.message -> cleanMsg)
+      const bracketMatch = cleanMsg.match(/[\[\(【<「『](.*?)[\]\)】>」』]/);
       
       if (bracketMatch) {
         guildName = bracketMatch[1].replace(/채널\d+/, '').trim();
       } else {
-        // 2순위: 'OOO에서', 'OOO 길드' 형태 추출
-        const textMatch = r.message.match(/([가-힣a-zA-Z0-9]{2,10})(?:에서| 길드)/);
+        const textMatch = cleanMsg.match(/([가-힣a-zA-Z0-9]{2,10})(?:에서| 길드)/);
         if (textMatch) {
           const word = textMatch[1];
-          // 🔥 '함께하실', '성장할' 처럼 '~실', '~는', '~할', '~운', '~고' 로 끝나는 동사/형용사 완벽 차단!
-          // 🔥 초보, 성인, 매너 등 너무 뻔한 수식어도 차단!
           if (!/[실는할운고]$/.test(word) && !/초보|성인|매너|친목|신생|환영|모집|가입|성장|같이/.test(word)) {
             guildName = word;
           }
         }
       }
 
-      const chMatch = r.message.match(/([0-9]+)\s*(?:채|ch)/i);
+      const chMatch = cleanMsg.match(/([0-9]+)\s*(?:채|ch)/i);
       const channel = chMatch ? chMatch[1] + '채널' : '채널 미상';
 
       if (guildName && guildName.length >= 2 && !/^\d+$/.test(guildName)) {
         if (!guildMap[guildName]) guildMap[guildName] = { name: guildName, messages: [], server: r.server_name };
         if (guildMap[guildName].messages.length < 3) {
-          guildMap[guildName].messages.push({ text: r.message, character: r.character_name, channel: channel, date: r.date_send });
+          // 🔥 3. 화면에 뿌려줄 때도 정화된 cleanMsg를 보냅니다!
+          guildMap[guildName].messages.push({ text: cleanMsg, character: r.character_name, channel: channel, date: r.date_send });
         }
       }
     });
@@ -492,39 +494,63 @@ app.get('/api/stats/blackmarket', async (req, res) => {
   try {
     const result = await pool.query(query, params);
     
-    // 🔥 작가님 기획 아이템 5대장
-    const trends = {
-      '브리 구슬': { prices: [] },
-      '인능상': { prices: [] },
-      '거불 인보포': { prices: [] },
-      '거불 시암': { prices: [] },
-      '수세공': { prices: [] }
-    };
+    // 1. 트렌드 목록에 인형가방 추가
+        const trends = {
+          '브리 구슬': { prices: [] },
+          '인능상': { prices: [] },
+          '거불 인보포': { prices: [] },
+          '거불 시암': { prices: [] },
+          '수세공': { prices: [] },
+          '인형가방 (떨굼)': { prices: [] } // 🔥 추가 완료
+        };
 
-    result.rows.forEach(r => {
-      // 띄어쓰기 다 무시하고 검색하기 위해 공백 제거
-      const msg = r.message.replace(/\s+/g, ''); 
+        // 2. 스마트 가격 변환기: 0.5(억), 5천(만), 800(숲)을 모두 '숲' 단위로 통일
+        const parseSoop = (numStr, unit) => {
+          let num = parseFloat(numStr);
+          if (unit === '억') return num * 10000;
+          if (unit && unit.startsWith('천')) return num * 1000; // 5천 = 5000숲
+          if (unit === '만') return num; 
+          if (unit === '숲') return num;
+          
+          if (num < 20) return num * 10000; // 0.5, 1.2 등은 '억'으로 간주 (5000숲)
+          return num; // 800, 900 등은 '숲'으로 간주
+        };
 
-      // 1. 브리 구슬 (뀨, 구구, 구슬구매, 거불구슬) + 뒤에 숫자(가격)
-      const beadMatch = msg.match(/(뀨|구구|구슬구매|거불구슬)(\d+)(숲|만)?/);
-      if (beadMatch) trends['브리 구슬'].prices.push({ time: r.date_send, price: parseInt(beadMatch[2]) });
+        result.rows.forEach(r => {
+          // 띄어쓰기 무시
+          const msg = r.message.replace(/\s+/g, ''); 
+          const itemData = { time: r.date_send, character: r.character_name, message: r.message };
 
-      // 2. 인능상
-      const inMatch = msg.match(/(인능상|인챈트능력의상승스크롤)(\d+)(숲|만)?/);
-      if (inMatch) trends['인능상'].prices.push({ time: r.date_send, price: parseInt(inMatch[2]) });
+          // 5대장 낚시 (소수점 지원)
+          const beadMatch = msg.match(/(뀨|구구|구슬구매|거불구슬)([0-9]*\.?[0-9]+)(억|천만?|숲|만)?/);
+          if (beadMatch) trends['브리 구슬'].prices.push({ ...itemData, price: parseSoop(beadMatch[2], beadMatch[3]) });
 
-      // 3. 거불 인보포
-      const inboMatch = msg.match(/(거불인보포|인보포거불)(\d+)(숲|만)?/);
-      if (inboMatch) trends['거불 인보포'].prices.push({ time: r.date_send, price: parseInt(inboMatch[2]) });
+          const inMatch = msg.match(/(인능상|인챈트능력의상승스크롤)([0-9]*\.?[0-9]+)(억|천만?|숲|만)?/);
+          if (inMatch) trends['인능상'].prices.push({ ...itemData, price: parseSoop(inMatch[2], inMatch[3]) });
 
-      // 4. 거불 시암
-      const siamMatch = msg.match(/(거불시암|시암거불)(\d+)(숲|만)?/);
-      if (siamMatch) trends['거불 시암'].prices.push({ time: r.date_send, price: parseInt(siamMatch[2]) });
+          const inboMatch = msg.match(/(거불인보포|인보포거불)([0-9]*\.?[0-9]+)(억|천만?|숲|만)?/);
+          if (inboMatch) trends['거불 인보포'].prices.push({ ...itemData, price: parseSoop(inboMatch[2], inboMatch[3]) });
 
-      // 5. 수세공 (수세공, 거불수세공)
-      const suseMatch = msg.match(/(거불수세공|수세공)(\d+)(숲|만)?/);
-      if (suseMatch) trends['수세공'].prices.push({ time: r.date_send, price: parseInt(suseMatch[2]) });
-    });
+          const siamMatch = msg.match(/(거불시암|시암거불)([0-9]*\.?[0-9]+)(억|천만?|숲|만)?/);
+          if (siamMatch) trends['거불 시암'].prices.push({ ...itemData, price: parseSoop(siamMatch[2], siamMatch[3]) });
+
+          const suseMatch = msg.match(/(거불수세공|수세공)([0-9]*\.?[0-9]+)(억|천만?|숲|만)?/);
+          if (suseMatch) trends['수세공'].prices.push({ ...itemData, price: parseSoop(suseMatch[2], suseMatch[3]) });
+
+          // 🔥 작가님 피드백 완벽 적용! 인형가방 (떨굼식) 철벽 그물망
+          if (msg.includes('가방') && /떨굼|떨식|깐/.test(msg)) {
+            // [숫자] + [단위] + [에/으로] + [삼/팜 등 거래 동사] 구조만 낚아챔
+            const bagMatch = msg.match(/([0-9]*\.?[0-9]+)(억|천만?|숲|만)?(에|으로)?(팝니다|삽니다|판매|구매|팜|삼|팔아요|사요|구함|구해)/);
+            
+            if (bagMatch) {
+              let price = parseSoop(bagMatch[1], bagMatch[2]);
+              // 1채널 팜 등 엉뚱한 필터링 방지 (최소 100숲 ~ 5만숲)
+              if (price >= 100 && price <= 50000) {
+                trends['인형가방 (떨굼)'].prices.push({ ...itemData, price });
+              }
+            }
+          }
+        });
 
     const summary = {};
     for (const [item, data] of Object.entries(trends)) {
