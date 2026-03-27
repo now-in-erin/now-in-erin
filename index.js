@@ -157,12 +157,72 @@ app.get('/api/stats/summary', async (req, res) => {
 });
 
 app.get('/api/stats/daily', async (req, res) => {
-  const server = req.query.server;
-  let query = `SELECT * FROM daily_summary ORDER BY target_date DESC, server_name ASC LIMIT 20`;
-  const params = [];
-  if (server && server !== 'all') { query = `SELECT * FROM daily_summary WHERE server_name = $1 ORDER BY target_date DESC LIMIT 7`; params.push(server); }
-  const result = await pool.query(query, params);
-  res.json(result.rows);
+  const server = req.query.server || 'all';
+  // 최근 24시간 데이터만 가져옵니다
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); 
+  
+  let query = `SELECT server_name, character_name, message, date_send FROM horn WHERE date_send >= $1`;
+  const params = [since];
+  if (server !== 'all') { params.push(server); query += ` AND server_name = $${params.length}`; }
+
+  try {
+    const result = await pool.query(query, params);
+    
+    // 1. 서버별 뿔피리 화력
+    const serverCounts = { '류트': 0, '만돌린': 0, '하프': 0, '울프': 0 };
+    // 2. 핫 채널 (숫자+채널)
+    const channelCounts = {};
+    // 3. 에린 감정 지수 (ㅋㅋ vs ㅠㅠ)
+    let laughCount = 0;
+    let cryCount = 0;
+    // 4. 단어 빈도수 (간단한 키워드 추출)
+    const wordCounts = {};
+
+    result.rows.forEach(r => {
+      const msg = r.message;
+      
+      // 서버 카운트
+      if (serverCounts[r.server_name] !== undefined) serverCounts[r.server_name]++;
+
+      // 감정 지수 체크
+      if (/(ㅋㅋ+)/.test(msg)) laughCount++;
+      if (/(ㅠㅠ+|ㅜㅜ+)/.test(msg)) cryCount++;
+
+      // 핫 채널 체크 (예: 4채, 14채널, 20ch)
+      const chMatch = msg.match(/([0-9]{1,2})\s*(채널|채|ch)/i);
+      if (chMatch) {
+        const chNum = chMatch[1] + '채널';
+        channelCounts[chNum] = (channelCounts[chNum] || 0) + 1;
+      }
+
+      // 핫 키워드 추출 (불용어 제외, 2글자 이상)
+      const words = msg.replace(/[^\w가-힣]/g, ' ').split(/\s+/);
+      const stopWords = ['팝니다', '삽니다', '판매', '구매', '거뿔', '있는', '구함', '팔아요', '사요'];
+      words.forEach(w => {
+        if (w.length >= 2 && !stopWords.includes(w) && !/^[0-9]+$/.test(w)) {
+          wordCounts[w] = (wordCounts[w] || 0) + 1;
+        }
+      });
+    });
+
+    // 가장 많이 언급된 채널 찾기
+    const topChannel = Object.keys(channelCounts).sort((a, b) => channelCounts[b] - channelCounts[a])[0] || '측정 불가';
+    
+    // 가장 많이 언급된 키워드 찾기 (상위 1개)
+    const topKeyword = Object.keys(wordCounts).sort((a, b) => wordCounts[b] - wordCounts[a])[0] || '측정 불가';
+
+    // 종합 데이터 응답
+    res.json({
+      total: result.rows.length,
+      serverCounts,
+      topChannel,
+      emotion: { laugh: laughCount, cry: cryCount },
+      topKeyword
+    });
+
+  } catch (e) { 
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.get('/api/stats/hall-of-fame', async (req, res) => {
@@ -507,7 +567,6 @@ app.get('/api/stats/blackmarket', async (req, res) => {
       '크롬 장기': { prices: [] },
       '인능상': { prices: [] },
       '거불 인보포': { prices: [] },
-      '거불 시암': { prices: [] },
       '수세공': { prices: [] },
       '인형가방 (떨굼)': { prices: [] }
     };
@@ -558,7 +617,6 @@ app.get('/api/stats/blackmarket', async (req, res) => {
       extractMatch(/(아다만|아다만티움|글기깃|글기심|장기)([0-9]*\.?[0-9]+)(억|천만?|숲|만)?/, '크롬 장기');
       extractMatch(/(인능상|인챈트능력의상승스크롤)([0-9]*\.?[0-9]+)(억|천만?|숲|만)?/, '인능상');
       extractMatch(/(거불인보포|인보포거불)([0-9]*\.?[0-9]+)(억|천만?|숲|만)?/, '거불 인보포');
-      extractMatch(/(거불시암|시암거불)([0-9]*\.?[0-9]+)(억|천만?|숲|만)?/, '거불 시암');
       extractMatch(/(거불수세공|수세공)([0-9]*\.?[0-9]+)(억|천만?|숲|만)?/, '수세공');
 
       if (msg.includes('가방') && /떨굼|떨식|깐/.test(msg)) {

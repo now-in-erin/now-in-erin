@@ -693,7 +693,7 @@
     .dungeon-card.d-glen .dungeon-count{color:var(--teal);}
     .dungeon-card.d-etc .dungeon-count{color:var(--text3);}
     .dungeon-recent{display:flex;flex-direction:column;gap:5px;}
-    .dungeon-recent-item{font-size:12px;color:var(--text2);background:var(--bg);border-radius:6px;padding:6px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .dungeon-recent-item{font-size:14px;color:var(--text2);background:var(--bg);border-radius:8px;padding:8px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .member-chart-wrap{position:relative;height:200px;}
     .party-total-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(91,141,238,0.1);border:1px solid rgba(91,141,238,0.2);border-radius:8px;padding:8px 16px;font-size:13px;color:var(--blue);margin-bottom:20px;}
 
@@ -1465,7 +1465,7 @@
     </div>
 
     <!-- 🔥 골칫덩어리 차트 날아감! -->
-    <div class="section-title">🏴‍☠️ 어둠의 거래소 (거불/특수 거래)</div>
+    <div class="section-title">📦 거불 거래</div>
     <div class="chart-section" style="margin-bottom: 24px; padding: 16px; display:flex; gap:12px; flex-wrap:wrap;" id="blackMarketCards">
       <div class="loading-row"><div class="spinner"></div> 분석 중...</div>
     </div>
@@ -1523,36 +1523,56 @@
     try {
       const res = await fetch(`${API}/api/stats/daily?server=${server}`);
       const data = await res.json();
-      if (!data || data.length === 0) {
-        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--text3); font-size:13px; padding:20px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">아직 생성된 요약이 없어요. (매일 자정에 전날 기록이 생성됩니다)</div>';
-        document.getElementById('dailySummaryDate').textContent = '';
+      
+      if (!data || data.total === 0) {
+        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--text3); font-size:13px; padding:20px; background:var(--surface); border-radius:12px; border:1px solid var(--border);">최근 24시간 동안 수집된 거뿔이 없습니다.</div>';
         return;
       }
-      const latestDate = data[0].target_date.split('T')[0];
-      document.getElementById('dailySummaryDate').textContent = `(${latestDate} 기준)`;
-      const latestData = data.filter(d => d.target_date.startsWith(latestDate));
-      grid.innerHTML = latestData.map(d => {
-        const maskedName = d.horn_king_name.length <= 2 ? d.horn_king_name[0] + 'X' : d.horn_king_name.slice(0, 2) + 'X'.repeat(d.horn_king_name.length - 2);
-        return `
+
+      // 오늘 에린의 감정 분석
+      let moodText = "평온 😐";
+      if (data.emotion.laugh > data.emotion.cry * 1.5) moodText = "행복함 (ㅋㅋ 압도적) 😆";
+      else if (data.emotion.cry > data.emotion.laugh * 1.5) moodText = "슬픔 (ㅠㅠ 오열중) 😭";
+      else moodText = "단짠단짠 (ㅋㅋ와 ㅠㅠ 공존) 🎭";
+
+      // 서버별 화력 뱃지 HTML 생성
+      const serverFirepower = `
+        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+          ${Object.entries(data.serverCounts).map(([srv, count]) => `
+            <span style="background:var(--bg); border:1px solid var(--border2); padding:3px 8px; border-radius:6px; font-size:11px; color:var(--text2);">
+              ${srv} <strong style="color:var(--gold2);">${count.toLocaleString()}</strong>개
+            </span>
+          `).join('')}
+        </div>
+      `;
+
+      grid.innerHTML = `
+        <div class="daily-card" style="grid-column: 1 / -1;">
+          <div class="daily-card-header" style="margin-bottom:12px;">
+            <span style="font-size:14px; font-weight:bold; color:var(--text);">📊 최근 24시간 에린 화력</span>
+            <span style="font-size:12px; color:var(--text3);">총 ${data.total.toLocaleString()}건</span>
+          </div>
+          ${server === 'all' ? serverFirepower : `<div style="font-size:14px; color:var(--gold2); font-weight:bold;">${server} 서버 화력: ${data.serverCounts[server].toLocaleString()}건</div>`}
+        </div>
+
         <div class="daily-card">
-          <div class="daily-card-header">
-            <span class="badge badge-server" style="font-size:12px; padding:3px 8px;">${d.server_name}</span>
-            <span style="font-size:12px; color:var(--text3); font-family:'JetBrains Mono', monospace;">어제 총 ${d.total_messages.toLocaleString()}건</span>
-          </div>
-          <div class="daily-stat-row">
-            <span class="daily-stat-label">🔥 가장 핫한 시간</span>
-            <span class="daily-stat-val">${d.peak_hour}시</span>
-          </div>
-          <div class="daily-stat-row">
-            <span class="daily-stat-label">⚔️ 인기 던전</span>
-            <span class="daily-stat-val">${d.popular_dungeon}</span>
-          </div>
-          <div class="daily-stat-row">
-            <span class="daily-stat-label">👑 거뿔 왕</span>
-            <span class="daily-stat-val highlight">${maskedName} (${d.horn_king_count}회)</span>
-          </div>
-        </div>`
-      }).join('');
+          <div class="daily-stat-label" style="margin-bottom:8px;">📡 오늘의 핫 채널</div>
+          <div class="daily-stat-val highlight" style="font-size:18px;">${data.topChannel}</div>
+          <div style="font-size:11px; color:var(--text3); margin-top:4px;">파티/거래 성지</div>
+        </div>
+
+        <div class="daily-card">
+          <div class="daily-stat-label" style="margin-bottom:8px;">🎭 에린 감정 지수</div>
+          <div class="daily-stat-val" style="font-size:16px;">${moodText}</div>
+          <div style="font-size:11px; color:var(--text3); margin-top:4px;">ㅋㅋ ${data.emotion.laugh}회 / ㅠㅠ ${data.emotion.cry}회</div>
+        </div>
+
+        <div class="daily-card" style="grid-column: 1 / -1;">
+          <div class="daily-stat-label" style="margin-bottom:8px;">🏃‍♂️ 급상승 다크호스 키워드</div>
+          <div class="daily-stat-val highlight" style="color:var(--gold); font-size:20px;">#${data.topKeyword}</div>
+          <div style="font-size:11px; color:var(--text3); margin-top:4px;">최근 24시간 동안 가장 많이 언급된 단어</div>
+        </div>
+      `;
     } catch (e) {
       grid.innerHTML = '<div style="grid-column:1/-1; color:var(--red); font-size:13px;">요약 데이터를 불러오는 중 오류가 발생했습니다.</div>';
     }
@@ -1742,7 +1762,7 @@
 
 
   // ==========================================
-  // 💰 어둠의 거래소 & 그 외 거래 (중복 압축!)
+  // 💰 거불 거래 & 그 외 거래 (중복 압축!)
   // ==========================================
   async function loadBlackMarket() {
     const server = getServer();
@@ -2167,32 +2187,56 @@
       }
 
       if(cardsWrap) {
-        cardsWrap.innerHTML = Object.entries(data).sort((a,b)=>b[1].count - a[1].count).map(([name, info]) => {
-          
-          const isAllServer = getServer() === 'all';
-          let serverAvgsHtml = '';
-          if (isAllServer && info.serverAvgs) {
-             serverAvgsHtml = `<div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">` + 
-               Object.entries(info.serverAvgs).map(([srv, avg]) => 
-                 `<span style="background:var(--surface); border:1px solid var(--border2); padding:3px 8px; border-radius:6px; font-size:11px; color:var(--text2);">
-                    ${srv} <strong style="color:var(--gold2);">${avg.toLocaleString()}</strong>숲
-                  </span>`
-               ).join('') + `</div>`;
-          }
+        cardsWrap.innerHTML = `
+        <div style="width:100%; padding:0 8px 12px 8px; font-size:12px; color:var(--text3); line-height:1.5;">
+          💡 위 금액은 <strong>전체 서버의 최근 거래 평균값</strong>이며, 각 서버 뱃지는 <strong>해당 서버 내 평균</strong>입니다. <br>
+          묶음 판매 등 이상치는 자동으로 제외되었습니다. 상세 내역은 카드를 <strong>클릭</strong>해서 확인하세요.
+        </div>
+      ` + Object.entries(data).sort((a,b)=>b[1].count - a[1].count).map(([name, info]) => {
+        
+        const isAllServer = getServer() === 'all';
+        let serverAvgsHtml = '';
+        if (isAllServer && info.serverAvgs) {
+           serverAvgsHtml = `<div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">` + 
+             Object.entries(info.serverAvgs).map(([srv, avg]) => 
+               `<span style="background:var(--surface); border:1px solid var(--border2); padding:3px 8px; border-radius:6px; font-size:11px; color:var(--text2);">
+                  ${srv} <strong style="color:var(--gold2);">${avg.toLocaleString()}</strong>숲
+                </span>`
+             ).join('') + `</div>`;
+        }
 
-          const historyHtml = info.history.slice(0, 20).map(h => {
-            const timeStr = new Date(h.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-            const charName = h.character || h.message.split(':')[0].trim() || '익명';
-            const serverBadge = h.server ? `<span class="badge badge-server" style="font-size:9px; padding:1px 5px; margin-left:4px;">${h.server}</span>` : '';
-            
-            return `<div style="font-size:12px; color:var(--text2); margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
-              <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                <div><span style="color:var(--gold2); font-weight:bold;">👤 ${charName}</span>${serverBadge}</div>
-                <span style="color:var(--text3); font-size:10px;">${timeStr}</span>
-              </div>
-              <div style="line-height:1.4; word-break:break-all;">📯 ${h.message}</div>
-            </div>`;
-          }).join('');
+        const historyHtml = info.history.slice(0, 20).map(h => {
+          const timeStr = new Date(h.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+          const charName = h.character || h.message.split(':')[0].trim() || '익명';
+          const serverBadge = h.server ? `<span class="badge badge-server" style="font-size:9px; padding:1px 5px; margin-left:4px;">${h.server}</span>` : '';
+          
+          return `<div style="font-size:12px; color:var(--text2); margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+              <div><span style="color:var(--gold2); font-weight:bold;">👤 ${charName}</span>${serverBadge}</div>
+              <span style="color:var(--text3); font-size:10px;">${timeStr}</span>
+            </div>
+            <div style="line-height:1.4; word-break:break-all;">📯 ${h.message}</div>
+          </div>`;
+        }).join('');
+
+        return `
+        <div style="flex:1; min-width:320px; max-width:100%; background:var(--surface2); border:1px solid var(--border); padding:18px; border-radius:12px; cursor:pointer; display:flex; flex-direction:column;" 
+             onclick="const el = this.querySelector('.bm-history'); el.style.display = el.style.display === 'none' ? 'block' : 'none'">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div style="font-weight:900; font-size:16px; color:var(--text);">🔎 ${name}</div>
+              ${serverAvgsHtml}
+            </div>
+            <div style="text-align:right;">
+              <div style="color:var(--gold); font-weight:900; font-family:'JetBrains Mono', monospace; font-size:20px;">${info.avg.toLocaleString()}숲</div>
+              <div style="font-size:11px; color:var(--text3); margin-top:4px;">최근 ${info.count}건 ▼</div>
+            </div>
+          </div>
+          <div class="bm-history" style="display:none; margin-top:12px; max-height: 250px; overflow-y: auto; padding-right:8px;">
+            ${historyHtml}
+          </div>
+        </div>`;
+      }).join('');
 
           return `
           <div style="flex:1; min-width:320px; max-width:100%; background:var(--surface2); border:1px solid var(--border); padding:18px; border-radius:12px; cursor:pointer; display:flex; flex-direction:column;" 
@@ -2303,7 +2347,7 @@
           list.innerHTML = data.raw.map(r => `
             <div class="guild-card">
               <div class="guild-name">📯 ${r.character_name} <span class="badge badge-server">${r.server_name}</span></div>
-              <div class="guild-msg">${r.message}</div>
+              <div class="guild-msg" style="font-size:14px; padding:8px 0;">${r.message}</div>
             </div>`).join('');
         } else {
           list.innerHTML = '<div class="placeholder" style="height:120px"><span>현재 길드원 모집 중인 곳이 없어요</span></div>';
@@ -2320,7 +2364,7 @@
                     <span style="font-weight:700; color:var(--gold2);">👤 ${m.character}</span>
                     <span style="color:var(--text3); font-family:'JetBrains Mono', monospace;">📡 ${m.channel} · ⏰ ${timeStr}</span>
                   </div>
-                  <div style="font-size:13px; color:var(--text); line-height:1.5; word-break:break-all;">${m.text}</div>
+                  <div style="font-size:15px; color:var(--text); line-height:1.6; word-break:break-all;">${m.text}</div>
                 </div>`;
             }).join('')}
           </div>`).join('');
