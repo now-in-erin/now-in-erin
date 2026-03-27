@@ -5,9 +5,30 @@ const cron = require('node-cron');
 const { Pool } = require('pg');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const app = express();
-app.use(cors());
+
+// 1. 기본 보안 헬멧 쓰기 (해커들이 훔쳐보기 어렵게 만듦)
+app.use(helmet());
+
+// 2. CORS 엄격하게 설정 (내 깃허브 사이트에서만 서버에 말 걸 수 있게 철벽 방어!)
+app.use(cors({
+  origin: ['https://now-in-erin.github.io', 'http://localhost:3000'],
+  methods: ['GET']
+}));
+
 app.use(express.json());
+
+// 3. Rate Limit (나쁜 놈들이 서버 터뜨리려고 F5 연타하는 걸 막아줌)
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1분 동안
+  max: 100,                // 100번까지만 접속 허용! 그 이상은 차단.
+  message: { error: '마나의 흐름이 불안정합니다. 잠시 후 다시 시도해주세요.' } // 에러 메시지
+});
+
+// 주소가 /api/ 로 시작하는 모든 요청에 위의 방어막(apiLimiter)을 씌움
+app.use('/api/', apiLimiter);
 
 const API_KEY = process.env.NEXON_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -532,9 +553,17 @@ app.get('/api/stats/lobby-weather', async (req, res) => {
     const result = await pool.query(query, params);
     const messages = result.rows.map(r => r.message).join('\n');
 
-    const prompt = `너는 마비노기 기상캐스터야. 다음 최근 거뿔 60개를 보고 현재 서버 분위기를 재밌고 센스있게 딱 '한 줄'로 요약해. (예시: 현재 류트 서버는 '나이트 브링어' 매물 눈치싸움과 '브리레흐 4관' 구인으로 매우 뜨겁습니다!)
-    [최근 거뿔]
-    ${messages}`;
+    const prompt = `너는 마비노기 서버 분위기를 객관적이고 재밌게 알려주는 안내자야.
+다음 최근 거뿔 60개를 보고 현재 서버 분위기를 센스있게 딱 '한 줄'로 요약해.
+
+🚨 [절대 지켜야 할 규칙] 🚨
+1. 본인을 특정 NPC(나오 등)나 기상캐스터라고 칭하지 마. (예: "안녕하세요 나오입니다" 절대 금지)
+2. 거뿔에 언급된 특정 유저의 닉네임은 절대로 포함하지 마.
+3. 던전 이름은 반드시 공식 명칭인 '브리 레흐'로만 출력해. 이상한 변형은 금지야.
+4. 결과는 부가 설명 없이 딱 요약된 한 줄 텍스트만 출력해.
+
+[최근 거뿔]
+${messages}`;
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const aiResult = await model.generateContent(prompt);
@@ -553,7 +582,7 @@ app.get('/api/stats/lobby-weather', async (req, res) => {
 // ── 🏴‍☠️ 거불/특수 거래 (어둠의 거래소) API ──
 app.get('/api/stats/blackmarket', async (req, res) => {
   const server = req.query.server || 'all';
-  const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(); 
+  const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(); // 고정 6시간
 
   let query = `SELECT server_name, character_name, message, date_send FROM horn WHERE date_send >= $1`;
   const params = [since];

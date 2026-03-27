@@ -1432,19 +1432,16 @@
 
 <div class="page" id="page-party">
   <div class="wrap">
-    <div class="page-header">
-      <div class="page-title">파티 모집 현황</div>
-      <div class="page-sub">// 뿔피리 파티 모집 메시지 분석</div>
-    </div>
-    <div class="keyword-controls">
-      <select id="partyDaysFilter" onchange="loadParty()">
-        <option value="1">최근 1일</option>
-        <option value="3">최근 3일</option>
-        <option value="7">최근 7일</option>
-      </select>
-      <button class="btn btn-primary" onclick="loadParty()">↻ 새로고침</button>
-      <span class="keyword-status" id="partyStatus"></span>
-    </div>
+    <!-- page-party 부분 수정 -->
+<div class="page-header">
+  <div class="page-title">파티 모집 현황</div>
+  <div class="page-sub">// 최근 6시간 이내 모집 거뿔만 나옵니다</div>
+</div>
+<div class="keyword-controls">
+  <!-- 기간 선택 select 삭제됨 -->
+  <button class="btn btn-primary" onclick="loadParty()">↻ 새로고침</button>
+  <span class="keyword-status" id="partyStatus"></span>
+</div>
     <div id="partyTotalBadge"></div>
     <div class="party-grid" id="partyGrid">
       <div class="placeholder" style="height:200px;grid-column:1/-1"><div class="spinner"></div><span>로딩 중...</span></div>
@@ -1696,6 +1693,22 @@
     fetchFeed(false);
   }
 
+  function alertNewParty(item) {
+    const toast = document.createElement('div');
+    toast.style.cssText = 'background:rgba(30, 36, 54, 0.9); border:1px solid var(--blue); border-left:4px solid var(--blue); color:#fff; padding:16px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-size:14px; max-width:300px; animation: slideIn 0.3s ease; backdrop-filter: blur(4px); cursor: pointer;';
+    toast.innerHTML = `<div style="color:var(--blue); font-weight:bold; font-size:12px; margin-bottom:4px;">🚨 새로운 파티 모집</div>${item.message}`;
+    toast.onclick = () => toast.remove();
+    document.getElementById('party-toast-container').appendChild(toast);
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5000);
+
+    if ('speechSynthesis' in window) {
+      const speech = new SpeechSynthesisUtterance(`${item.character_name} 님이 파티를 모집합니다. ${item.message}`);
+      speech.lang = 'ko-KR';
+      speech.rate = 1.1;
+      window.speechSynthesis.speak(speech);
+    }
+  }
+
   async function fetchFeed(isLoadMore = false) {
     if (isFetchingFeed) return;
     isFetchingFeed = true;
@@ -1729,14 +1742,18 @@
         const key = makeKey(item);
         if (!seenKeys.has(key)) {
           seenKeys.add(key);
-          const itemEl = renderFeedItem(item, !isLoadMore);
-          
+          const isNewItem = !isLoadMore;
+          const itemEl = renderFeedItem(item, isNewItem);
+
+          // 🔥 새로 들어온 거뿔이고, 카테고리가 파티인 경우 알림 실행!
+          if (isNewItem && classify(item.message) === 'party') {
+            alertNewParty(item);
+          }
+
           if (isLoadMore) {
-            // 🔥 스크롤 내릴 땐 과거 데이터니까 맨 아래로 (Append)
             feed.appendChild(itemEl);
           } else {
-            // 🔥 실시간 갱신 데이터는 무조건 맨 위로 (Prepend)
-            feed.prepend(itemEl); 
+            feed.prepend(itemEl);
           }
         }
       });
@@ -2153,172 +2170,7 @@
     }).join('');
   }
 
-  async function loadMarket() {
-    const server = getServer();
-    const statusEl = document.getElementById('marketStatus');
-    if (statusEl) statusEl.textContent = '로딩 중...';
 
-    loadBlackMarket();
-
-    try {
-      const res = await fetch(`${API}/api/stats/market?server=${server}&days=3`);
-      const data = await res.json();
-      marketData = data.trades || [];
-      renderMarket();
-      if (statusEl) statusEl.textContent = `갱신: ${new Date().toLocaleTimeString('ko-KR')} · ${marketData.length}건 발골 완료`;
-    } catch (e) {
-      if (statusEl) statusEl.textContent = '서버 연결 실패';
-    }
-  }
-
-  let blackMarketChart = null;
-  async function loadBlackMarket() {
-    const server = getServer();
-    try {
-      const res = await fetch(`${API}/api/stats/blackmarket?server=${server}`);
-      const data = await res.json();
-      const chartWrap = document.getElementById('blackMarketChartWrap');
-      const cardsWrap = document.getElementById('blackMarketCards');
-
-      if (Object.keys(data).length === 0) {
-        if(chartWrap) chartWrap.innerHTML = '<div class="empty-state">데이터가 부족합니다</div>';
-        if(cardsWrap) cardsWrap.innerHTML = '<div class="empty-state">최근 거래 내역이 없습니다</div>';
-        return;
-      }
-
-      if(cardsWrap) {
-        cardsWrap.innerHTML = `
-        <div style="width:100%; padding:0 8px 12px 8px; font-size:12px; color:var(--text3); line-height:1.5;">
-          💡 위 금액은 <strong>전체 서버의 최근 거래 평균값</strong>이며, 각 서버 뱃지는 <strong>해당 서버 내 평균</strong>입니다. <br>
-          묶음 판매 등 이상치는 자동으로 제외되었습니다. 상세 내역은 카드를 <strong>클릭</strong>해서 확인하세요.
-        </div>
-      ` + Object.entries(data).sort((a,b)=>b[1].count - a[1].count).map(([name, info]) => {
-        
-        const isAllServer = getServer() === 'all';
-        let serverAvgsHtml = '';
-        if (isAllServer && info.serverAvgs) {
-           serverAvgsHtml = `<div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">` + 
-             Object.entries(info.serverAvgs).map(([srv, avg]) => 
-               `<span style="background:var(--surface); border:1px solid var(--border2); padding:3px 8px; border-radius:6px; font-size:11px; color:var(--text2);">
-                  ${srv} <strong style="color:var(--gold2);">${avg.toLocaleString()}</strong>숲
-                </span>`
-             ).join('') + `</div>`;
-        }
-
-        const historyHtml = info.history.slice(0, 20).map(h => {
-          const timeStr = new Date(h.time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-          const charName = h.character || h.message.split(':')[0].trim() || '익명';
-          const serverBadge = h.server ? `<span class="badge badge-server" style="font-size:9px; padding:1px 5px; margin-left:4px;">${h.server}</span>` : '';
-          
-          return `<div style="font-size:12px; color:var(--text2); margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
-            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-              <div><span style="color:var(--gold2); font-weight:bold;">👤 ${charName}</span>${serverBadge}</div>
-              <span style="color:var(--text3); font-size:10px;">${timeStr}</span>
-            </div>
-            <div style="line-height:1.4; word-break:break-all;">📯 ${h.message}</div>
-          </div>`;
-        }).join('');
-
-        return `
-        <div style="flex:1; min-width:320px; max-width:100%; background:var(--surface2); border:1px solid var(--border); padding:18px; border-radius:12px; cursor:pointer; display:flex; flex-direction:column;" 
-             onclick="const el = this.querySelector('.bm-history'); el.style.display = el.style.display === 'none' ? 'block' : 'none'">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-            <div>
-              <div style="font-weight:900; font-size:16px; color:var(--text);">🔎 ${name}</div>
-              ${serverAvgsHtml}
-            </div>
-            <div style="text-align:right;">
-              <div style="color:var(--gold); font-weight:900; font-family:'JetBrains Mono', monospace; font-size:20px;">${info.avg.toLocaleString()}숲</div>
-              <div style="font-size:11px; color:var(--text3); margin-top:4px;">최근 ${info.count}건 ▼</div>
-            </div>
-          </div>
-          <div class="bm-history" style="display:none; margin-top:12px; max-height: 250px; overflow-y: auto; padding-right:8px;">
-            ${historyHtml}
-          </div>
-        </div>`;
-      }).join('');
-
-          return `
-          <div style="flex:1; min-width:320px; max-width:100%; background:var(--surface2); border:1px solid var(--border); padding:18px; border-radius:12px; cursor:pointer; display:flex; flex-direction:column;" 
-               onclick="const el = this.querySelector('.bm-history'); el.style.display = el.style.display === 'none' ? 'block' : 'none'">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-              <div>
-                <div style="font-weight:900; font-size:16px; color:var(--text);">🔎 ${name}</div>
-                ${serverAvgsHtml}
-              </div>
-              <div style="text-align:right;">
-                <div style="color:var(--gold); font-weight:900; font-family:'JetBrains Mono', monospace; font-size:20px;">${info.avg.toLocaleString()}숲</div>
-                <div style="font-size:11px; color:var(--text3); margin-top:4px;">최근 ${info.count}건 ▼</div>
-              </div>
-            </div>
-            <div class="bm-history" style="display:none; margin-top:12px; max-height: 250px; overflow-y: auto; padding-right:8px;">
-              ${historyHtml}
-            </div>
-          </div>`;
-        }join('');
-      }
-    } catch (e) {
-      console.error(e);
-      const cardsWrap = document.getElementById('blackMarketCards');
-      if (cardsWrap) cardsWrap.innerHTML = '<div class="empty-state">오류 발생</div>';
-    }
-  }
-
-  function filterMarket() { renderMarket(); }
-
-  function renderMarket() {
-    const list = document.getElementById('marketList');
-    const kw = document.getElementById('marketSearch').value.trim().toLowerCase();
-    const filtered = marketData.filter(t => t.item.toLowerCase().includes(kw));
-    
-    if(filtered.length === 0) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-icon">💸</div><div class="empty-title">거래 내역이 없어요</div></div>';
-      return;
-    }
-
-    const grouped = {};
-    filtered.forEach(t => {
-      // 닉네임과 원문 메시지가 100% 동일하면 묶음 처리
-      const key = `${t.character}_${t.original}`;
-      if(!grouped[key]) {
-        grouped[key] = { ...t, times: [t.time] };
-      } else {
-        grouped[key].times.push(t.time);
-      }
-    });
-
-    list.innerHTML = Object.values(grouped).map(t => {
-      const isSell = t.action === '판매';
-      
-      // 시간 최신순 정렬
-      t.times.sort((a,b) => new Date(b) - new Date(a));
-      const lastTimeStr = new Date(t.times[0]).toLocaleString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-      
-      const timeStrs = t.times.map(time => {
-        const d = new Date(time);
-        return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-      });
-
-      // 뱃지 및 시간 리스트 생성
-      const badge = t.times.length > 1 ? `<span style="background:var(--red); color:#fff; padding:2px 6px; border-radius:10px; font-size:10px; margin-left:6px; vertical-align:middle;">${t.times.length}회 갱신</span>` : '';
-      const timeListHtml = t.times.length > 1 ? `<div style="font-size:11px; color:var(--text3); margin-top:6px; font-family:'JetBrains Mono', monospace;">⏰ 끌올 시간: ${timeStrs.join(', ')}</div>` : '';
-
-      return `
-        <div class="market-item action-${isSell ? 'sell' : 'buy'}">
-          <div class="market-info">
-            <div class="market-item-name">${t.item} ${badge}</div>
-            <div class="market-meta">📡 ${t.server} · 👤 ${t.character} · ⏰ 최근 ${lastTimeStr}</div>
-            <div style="font-size:13px; color:var(--text2); margin-top:6px;">📯 ${t.original}</div>
-            ${timeListHtml}
-          </div>
-          <div class="market-price-col">
-            <div class="market-price">${t.price.toLocaleString()}${t.unit}</div>
-            <div class="market-action">${isSell ? '팝니다' : '삽니다'}</div>
-          </div>
-        </div>`;
-    }).join('');
-    updateLobbyMarket();
-  }
 
   const KW_COLORS = ['#e8c96a','#5b8dee','#4ecdc4','#a78bfa','#f87171','#34d399','#fb923c','#e879f9','#38bdf8','#a3e635'];
   let currentKwTab = 'all';
@@ -2562,5 +2414,8 @@
     .then(() => setGlobalStatus('live', '연결됨'))
     .catch(() => setGlobalStatus('error', '서버 꺼짐'));
 </script>
+<!-- 파티 알림 팝업 컨테이너 -->
+<div id="party-toast-container" style="position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:10px;"></div>
+
 </body>
 </html>
