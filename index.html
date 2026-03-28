@@ -2042,8 +2042,16 @@ function toggleTts() {
             feed.appendChild(itemEl);
           } else {
             feed.prepend(itemEl);
+            
+            // 🚨 [추가된 부분] 새로 들어온 거뿔이 파티 모집이면 알림 쏘기! 🚨
+            // (!isFirstLoad: 사이트 처음 켰을 때 100개가 동시에 울리는 대참사 방지)
+            if (!isFirstLoad) {
+              const msgType = classify(item.message);
+              if (msgType === 'party') {
+                alertNewParty(item);
+              }
+            }
           }
-        }
       });
 
       isFirstLoad = false;
@@ -2204,7 +2212,7 @@ function toggleTts() {
   function startFeed() {
     document.getElementById('feed').innerHTML = '<div class="loading-row"><div class="spinner"></div> 거뿔을 불러오는 중...</div>';
     fetchFeed();
-    feedInterval = setInterval(fetchFeed, 10000);
+    feedInterval = setInterval(fetchFeed, 23000);
   }
 
   function clearFeed() {
@@ -2290,16 +2298,27 @@ function toggleTts() {
   }
 
   function renderSummary(data) {
-    document.getElementById('totalMsg').textContent = (data.total || 0).toLocaleString();
-    document.getElementById('todayMsg').textContent = (data.today || 0).toLocaleString();
+    // 아까 지워버린 totalMsg(총 누적) 관련 코드는 삭제했습니다!
+    
+    // '오늘' 데이터 채우기 (요소가 있는지 확인하고 넣음)
+    const todayEl = document.getElementById('todayMsg');
+    if (todayEl) {
+      todayEl.textContent = (data.today || 0).toLocaleString();
+    }
+    
+    // 서버별 현황 막대그래프 채우기
     const servers = data.servers || {};
     const max = Math.max(...Object.values(servers), 1);
-    document.getElementById('serverBars').innerHTML = Object.entries(servers).map(([name, count]) => `
-      <div class="server-bar-row">
-        <span class="server-bar-label">${name}</span>
-        <div class="server-bar-track"><div class="server-bar-fill" style="width:${Math.round(count/max*100)}%"></div></div>
-        <span class="server-bar-count">${count.toLocaleString()}</span>
-      </div>`).join('');
+    const serverBarsEl = document.getElementById('serverBars');
+    
+    if (serverBarsEl) {
+      serverBarsEl.innerHTML = Object.entries(servers).map(([name, count]) => `
+        <div class="server-bar-row">
+          <span class="server-bar-label">${name}</span>
+          <div class="server-bar-track"><div class="server-bar-fill" style="width:${Math.round(count/max*100)}%"></div></div>
+          <span class="server-bar-count">${count.toLocaleString()}</span>
+        </div>`).join('');
+    }
   }
 
   function renderHourly(data) {
