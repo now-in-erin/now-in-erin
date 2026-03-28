@@ -1316,6 +1316,15 @@
         -3px 3px 0 var(--border2), 3px 3px 0 var(--border2),
          0px  8px 0 var(--border),  4px 12px 15px rgba(0,0,0,0.4) !important; 
     }
+
+    /* ☀️ 클래식(라이트) 모드 메뉴 글씨 무조건 구출! */
+    .nav-logo, .nav-btn, .nav-right span, .hamburger-btn {
+      color: var(--text) !important;
+    }
+    .nav-btn.active {
+      color: var(--blue) !important;
+      font-weight: 900 !important;
+    }
   </style>
 </head>
 <body>
@@ -1971,11 +1980,14 @@ function toggleTts() {
 
     const server = getServer();
     const params = new URLSearchParams({ limit: 100 });
-    if (server !== 'all') params.set('server', server);
+    
+    // 'all' 이나 '전체 서버'가 아닐 때만 서버 파라미터 추가!
+    if (server && server !== 'all' && server !== '🌐 전체 서버') {
+      params.set('server', server);
+    }
     if (lastFeedKeyword) params.set('keyword', lastFeedKeyword);
 
     const feed = document.getElementById('feed');
-    // 🔥 스크롤 내릴 땐 현재 개수만큼 건너뛰기, 새로고침 땐 처음부터
     if (isLoadMore) {
       params.set('offset', feed.querySelectorAll('.feed-item').length);
     } else {
@@ -1987,25 +1999,23 @@ function toggleTts() {
       const data = await res.json();
       const items = data.items || [];
 
-      // 🔥 처음 로드하거나 검색할 때만 화면 비우기
       if (!isLoadMore && !lastFeedKeyword && seenKeys.size === 0) feed.innerHTML = '';
       
       const loading = feed.querySelector('.loading-row'); 
       if (loading && !isLoadMore) loading.remove();
 
+      // 전체 서버인데 거뿔이 아예 없는 경우 방어!
+      if (items.length === 0 && !isLoadMore) {
+         feed.innerHTML = '<div class="empty-state">아직 올라온 거뿔이 없거나 서버가 너무 평화롭습니다!</div>';
+      }
+
       const displayItems = isLoadMore ? items : [...items].reverse();
-      const isInitialBulkLoad = displayItems.length > 10;
       displayItems.forEach(item => {
         const key = makeKey(item);
         if (!seenKeys.has(key)) {
           seenKeys.add(key);
           const isNewItem = !isLoadMore;
           const itemEl = renderFeedItem(item, isNewItem);
-
-          // 🔥 새로 들어온 거뿔이고, 카테고리가 파티인 경우 알림 실행!
-          if (isNewItem && appInitialized && classify(item.message) === 'party') {
-            alertNewParty(item);
-          }
 
           if (isLoadMore) {
             feed.appendChild(itemEl);
@@ -2015,11 +2025,12 @@ function toggleTts() {
         }
       });
 
-isFirstLoad = false;
-      document.getElementById('feedMeta').innerHTML = `총 <span>${feed.querySelectorAll('.feed-item').length}</span>개 표시 중`;
-      updateLobbyFeed(); 
+      isFirstLoad = false;
+      const metaEl = document.getElementById('feedMeta');
+      if (metaEl) metaEl.innerHTML = `총 <span>${feed.querySelectorAll('.feed-item').length}</span>개 표시 중`;
 
     } catch (e) {
+      console.error("피드 로딩 에러:", e);
       setGlobalStatus('error', '서버 오류');
     } finally {
       isFetchingFeed = false;
@@ -2110,60 +2121,63 @@ isFirstLoad = false;
   function filterMarket() { renderMarket(); }
 
   function renderMarket() {
-    const list = document.getElementById('marketList');
-    const kw = document.getElementById('marketSearch').value.trim().toLowerCase();
-    const filtered = marketData.filter(t => t.item.toLowerCase().includes(kw));
-    
-    if(filtered.length === 0) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-icon">💸</div><div class="empty-title">거래 내역이 없어요</div></div>';
-      return;
-    }
-
-    const grouped = {};
-    filtered.forEach(t => {
-      // 🔥 수정: 닉네임과 원문 메시지가 100% 동일하면 무조건 하나로 묶음
-      const key = `${t.character}_${t.original}`;
-      if(!grouped[key]) {
-        grouped[key] = { ...t, times: [t.time] };
-      } else {
-        grouped[key].times.push(t.time);
+    try {
+      const list = document.getElementById('marketList');
+      const kw = document.getElementById('marketSearch').value.trim().toLowerCase();
+      const filtered = marketData.filter(t => t.item.toLowerCase().includes(kw));
+      
+      // 울프 서버처럼 거래 데이터가 진짜 0건일 때 보여줄 화면!
+      if(!filtered || filtered.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">💸</div>
+            <div class="empty-title">최근 수집된 거래 내역이 없습니다</div>
+            <div class="empty-sub">거뿔이 올라오지 않았거나 검색 결과가 없어요! (서버가 너무 평화롭네요 🕊️)</div>
+          </div>`;
+        return;
       }
-    });
 
-    list.innerHTML = Object.values(grouped).map(t => {
-      const isSell = t.action === '판매';
-      
-      // 시간 내림차순 정렬 (가장 최근 시간이 맨 앞)
-      t.times.sort((a,b) => new Date(b) - new Date(a));
-      const lastTimeStr = new Date(t.times[0]).toLocaleString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-      
-      // 끌올한 시간들 목록 만들기
-      const timeStrs = t.times.map(time => {
-        const d = new Date(time);
-        return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+      const grouped = {};
+      filtered.forEach(t => {
+        const key = `${t.character}_${t.original}`;
+        if(!grouped[key]) {
+          grouped[key] = { ...t, times: [t.time] };
+        } else {
+          grouped[key].times.push(t.time);
+        }
       });
 
-      // 여러 번 불렀으면 빨간 뱃지 달아주기
-      const badge = t.times.length > 1 ? `<span style="background:var(--red); color:#fff; padding:2px 6px; border-radius:10px; font-size:10px; margin-left:6px; vertical-align:middle;">${t.times.length}회 갱신</span>` : '';
-      
-      // 하단에 쪼르륵 끌올 시간 찍어주기
-      const timeListHtml = t.times.length > 1 ? `<div style="font-size:11px; color:var(--text3); margin-top:6px; font-family:'JetBrains Mono', monospace;">⏰ 끌올 시간: ${timeStrs.join(', ')}</div>` : '';
+      list.innerHTML = Object.values(grouped).map(t => {
+        const isSell = t.action === '판매';
+        t.times.sort((a,b) => new Date(b) - new Date(a));
+        const lastTimeStr = new Date(t.times[0]).toLocaleString('ko-KR', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        
+        const timeStrs = t.times.map(time => {
+          const d = new Date(time);
+          return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        });
 
-      return `
-        <div class="market-item action-${isSell ? 'sell' : 'buy'}">
-          <div class="market-info">
-            <div class="market-item-name">${t.item} ${badge}</div>
-            <div class="market-meta">📡 ${t.server} · 👤 ${t.character} · ⏰ 최근 ${lastTimeStr}</div>
-            <div style="font-size:13px; color:var(--text2); margin-top:6px;">📯 ${t.original}</div>
-            ${timeListHtml}
-          </div>
-          <div class="market-price-col">
-            <div class="market-price">${formatMabiPrice(t.price, t.unit)}</div>
-            <div class="market-action">${isSell ? '팝니다' : '삽니다'}</div>
-          </div>
-        </div>`;
-    }).join('');
-    updateLobbyMarket();
+        const badge = t.times.length > 1 ? `<span style="background:var(--red); color:#fff; padding:2px 6px; border-radius:10px; font-size:10px; margin-left:6px; vertical-align:middle;">${t.times.length}회 갱신</span>` : '';
+        const timeListHtml = t.times.length > 1 ? `<div style="font-size:11px; color:var(--text3); margin-top:6px; font-family:'JetBrains Mono', monospace;">⏰ 끌올 시간: ${timeStrs.join(', ')}</div>` : '';
+
+        return `
+          <div class="market-item action-${isSell ? 'sell' : 'buy'}">
+            <div class="market-info">
+              <div class="market-item-name">${t.item} ${badge}</div>
+              <div class="market-meta">📡 ${t.server} · 👤 ${t.character} · ⏰ 최근 ${lastTimeStr}</div>
+              <div style="font-size:13px; color:var(--text2); margin-top:6px;">📯 ${t.original}</div>
+              ${timeListHtml}
+            </div>
+            <div class="market-price-col">
+              <div class="market-price">${formatMabiPrice(t.price, t.unit)}</div>
+              <div class="market-action">${isSell ? '팝니다' : '삽니다'}</div>
+            </div>
+          </div>`;
+      }).join('');
+    } catch (err) {
+      console.error(err);
+      document.getElementById('marketList').innerHTML = '<div class="empty-state">데이터를 그리는 중 오류가 발생했습니다.</div>';
+    }
   }
 
   function startFeed() {
