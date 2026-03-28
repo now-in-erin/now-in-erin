@@ -18,36 +18,39 @@
     
     /* 🌹 1. 기본 테마: 로즈 핑크 (다크 초코 배경 + 핑크 포인트) */
     :root {
-      --bg: #1a1a1c;
-      --surface: #242428;
-      --surface2: #2f2f35;
-      --border: #3f3f46;
-      --border2: #52525b;
+      --bg: #251e20; /* 붉은빛이 도는 다크 초콜릿 배경 */
+      --surface: #302628; /* 살짝 밝은 초코 */
+      --surface2: #3d3134;
+      --border: #524246;
+      --border2: #6b575c;
       
       --gold: #d4a017;
       --gold2: #b8860b;
-      --blue: #e63946;    /* 모든 포인트 컬러(파란색)를 핑크로 대체! */
+      --blue: #e63946;    /* 강렬한 로즈 핑크 */
       --teal: #14b8a6;
       --purple: #9d4edd;
       --red: #e63946;
       
-      --text: #f4f4f5;
-      --text2: #a1a1aa;
-      --text3: #71717a;
+      --text: #fdf5f6; /* 살짝 핑크빛 도는 부드러운 하얀색 */
+      --text2: #d8c8cb; /* 인디핑크빛 회색 */
+      --text3: #a39396;
       
-      --nav-bg: #141415;
+      --nav-bg: #1c1517;
       --nav-h: 64px;
     }
 
-    /* 🌙 2. 심야 테마: 딥 블랙 + 보라색 (로아앱 감성) */
+    /* 🌙 2. 심야 테마: 딥 블랙 + 보라색 (진짜 어두운 심연의 밤) */
     [data-theme="midnight"] {
-      --bg: #0f0f11;
-      --surface: #1a1a1e;
-      --surface2: #24242a;
-      --border: #2e2e36;
-      --border2: #3f3f4a;
-      --blue: #9d4edd;    /* 포인트 컬러 보라색 */
-      --nav-bg: #0a0a0c;
+      --bg: #0b0914; /* 아주 진한 남보라색 배경 */
+      --surface: #151124;
+      --surface2: #1f1a36;
+      --border: #2f274c;
+      --border2: #423868;
+      --blue: #b388ff;    /* 쨍하고 예쁜 연보라색 포인트 */
+      --text: #f4f0ff;
+      --text2: #b8b0cc;
+      --text3: #7e7599;
+      --nav-bg: #05040a;
     }
 
     /* ☀️ 3. 클래식 테마: 예전에 쓰던 밝은 버전 (눈 아플 때용) */
@@ -118,6 +121,7 @@
 .action-sell .market-action { background: rgba(37,99,235,0.1); color: var(--blue); }
 .action-buy .market-price { color: var(--red); }
 .action-buy .market-action { background: rgba(220,38,38,0.1); color: var(--red); }
+
 /* ── 툴팁 애니메이션 및 스타일 ── */
 .market-original { 
   display: none; 
@@ -1242,6 +1246,48 @@
       background-color: #e63946; /* 로즈 핑크 동그라미 */
     }
   
+
+    /* 🍔 햄버거 메뉴 및 반응형 디자인 (맨 밑에서 기존 설정 덮어쓰기!) 🍔 */
+    @media (max-width: 1200px) {
+      .hamburger-btn { 
+        display: block !important; 
+      }
+
+      .main-navigation-wrapper {
+        display: none !important; 
+        flex-direction: column !important; 
+        position: absolute; 
+        top: 60px; left: 0; right: 0;
+        background-color: var(--surface) !important; 
+        border-bottom: 1px solid var(--border);
+        padding: 20px;
+        z-index: 1000;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+      }
+
+      .main-navigation-wrapper.open {
+        display: flex !important;
+      }
+
+      .nav-links {
+        flex-direction: column !important;
+        width: 100%;
+      }
+      .nav-btn {
+        width: 100%;
+        justify-content: flex-start; 
+      }
+      .nav-right {
+        flex-direction: column !important;
+        width: 100%;
+        border-top: 1px solid var(--border);
+        padding-top: 15px;
+        align-items: flex-start !important;
+      }
+      .nav-right select {
+        width: 100%; 
+      }
+    }
   </style>
 </head>
 <body>
@@ -1286,43 +1332,49 @@
   </div>
 </div>
 
-<nav>
-  <div class="nav-logo" onclick="showPage('lobby')">지금 에린에서는</div>
-  <div class="nav-links">
-    <button class="nav-btn active" id="nav-lobby" onclick="showPage('lobby')">🏠 로비</button>
-    <button class="nav-btn" id="nav-feed" onclick="showPage('feed')">📯 실시간 피드</button>
-    <button class="nav-btn" id="nav-analysis" onclick="showPage('analysis')">📊 분석</button>
-    <button class="nav-btn" id="nav-keywords" onclick="showPage('keywords')">☁️ 키워드</button>
-    <button class="nav-btn" id="nav-party" onclick="showPage('party')">🎮 파티 모집</button>
-    <button class="nav-btn" id="nav-market" onclick="showPage('market')">💰 거뿔 거래 시세</button>
-    <button class="nav-btn" id="nav-user" onclick="showPage('user')">🔍 유저 분석</button>
-  </div>
-  <div class="nav-right">
-    <select id="themeSelector" onchange="changeTheme()" style="margin-right: 12px; border-radius: 6px; padding: 4px 8px;">
-      <option value="rose">🌹 로즈 핑크 (기본)</option>
-      <option value="midnight">🌙 심야의 에린 (퍼플)</option>
-      <option value="classic">☀️ 클래식 (라이트)</option>
-    </select>
-    <div style="display: flex; align-items: center; gap: 8px; margin-right: 12px;">
-      <span style="font-size: 13px; color: var(--text2); font-weight: 700; cursor: pointer;" onclick="document.getElementById('ttsToggle').click()">🔊 파티 음성 알림</span>
-      <label style="position: relative; display: inline-block; width: 36px; height: 20px;">
-        <input type="checkbox" id="ttsToggle" onchange="toggleTts()" style="opacity: 0; width: 0; height: 0;">
-        <span class="toggle-slider"></span>
-      </label>
+<nav style="display: flex; justify-content: space-between; align-items: center; position: relative; padding: 10px 20px;">
+  
+  <div class="nav-logo MabiOld" onclick="showPage('lobby')" style="font-size: 20px; cursor: pointer;">지금 에린에서는</div>
+  
+  <button class="hamburger-btn" onclick="toggleMobileMenu()" style="display:none; background:none; border:none; color:var(--text); font-size:28px; cursor:pointer;">☰</button>
+
+  <div class="main-navigation-wrapper" style="display: flex; align-items: center; gap: 20px;">
+    
+    <div class="nav-links" style="display: flex; gap: 8px;">
+      <button class="nav-btn active" id="nav-lobby" onclick="showPage('lobby')">🏠 로비</button>
+      <button class="nav-btn" id="nav-feed" onclick="showPage('feed')">📯 실시간 피드</button>
+      <button class="nav-btn" id="nav-analysis" onclick="showPage('analysis')">📊 분석</button>
+      <button class="nav-btn" id="nav-keywords" onclick="showPage('keywords')">☁️ 키워드</button>
+      <button class="nav-btn" id="nav-party" onclick="showPage('party')">🎮 파티 모집</button>
+      <button class="nav-btn" id="nav-market" onclick="showPage('market')">💰 거뿔 거래 시세</button>
+      <button class="nav-btn" id="nav-user" onclick="showPage('user')">🔍 유저 분석</button>
     </div>
-    <select id="globalServer" onchange="onServerChange()">
-      <option value="all">전체 서버</option>
-      <option value="류트">류트</option>
-      <option value="만돌린">만돌린</option>
-      <option value="하프">하프</option>
-      <option value="울프">울프</option>
-    </select>
-    <div class="nav-status">
-      <div class="dot" id="globalDot"></div>
-      <span id="globalStatus">연결 중...</span>
+
+    <div class="nav-right" style="display: flex; align-items: center; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 13px; color: var(--text2); font-weight: 700; cursor: pointer; white-space:nowrap;" onclick="document.getElementById('ttsToggle').click()">🔊 음성 알림</span>
+        <label style="position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink:0;">
+          <input type="checkbox" id="ttsToggle" onchange="toggleTts()" style="opacity: 0; width: 0; height: 0;">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <select id="themeSelector" onchange="changeTheme()">
+        <option value="rose">🌹 로즈 핑크</option>
+        <option value="midnight">🌙 심야의 에린</option>
+        <option value="classic">☀️ 클래식</option>
+      </select>
+      
+      <select id="globalServer" onchange="onServerChange()">
+        <option value="all">🌐 전체 서버</option>
+        <option value="lute">류트</option>
+        <option value="mandolin">만돌린</option>
+        <option value="harp">하프</option>
+        <option value="wolf">울프</option>
+      </select>
     </div>
-  </div>
-</nav>
+
+  </div> </nav>
 
 <div class="page active" id="page-lobby">
   <div class="wrap">
@@ -2577,6 +2629,20 @@ isFirstLoad = false;
     const savedTheme = localStorage.getItem('erinTheme') || 'rose'; // 저장된 거 없으면 로즈 핑크!
   document.documentElement.setAttribute('data-theme', savedTheme);
   document.getElementById('themeSelector').value = savedTheme;
+
+// 👇 햄버거 메뉴 열고 닫는 스위치 함수 👇
+  function toggleMobileMenu() {
+    const wrapper = document.querySelector('.main-navigation-wrapper');
+    const hamburgerBtn = document.querySelector('.hamburger-btn');
+    
+    wrapper.classList.toggle('open'); // 열렸다 닫혔다 함
+
+    if (wrapper.classList.contains('open')) {
+      hamburgerBtn.innerHTML = '✕'; // 열리면 X 모양으로 변경
+    } else {
+      hamburgerBtn.innerHTML = '☰'; // 닫히면 햄버거 모양으로 복구
+    }
+  }
 
 </script>
 
