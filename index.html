@@ -1499,6 +1499,7 @@
   let newMsgCount = 0;
   let hourChart = null, donutChart = null, lineChart = null;
   let marketData = [];
+  let isFirstLoad = true;
 
   function selectServer(server) {
     document.getElementById('globalServer').value = server;
@@ -1694,20 +1695,57 @@
   }
 
   function alertNewParty(item) {
-    const toast = document.createElement('div');
-    toast.style.cssText = 'background:rgba(30, 36, 54, 0.9); border:1px solid var(--blue); border-left:4px solid var(--blue); color:#fff; padding:16px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-size:14px; max-width:300px; animation: slideIn 0.3s ease; backdrop-filter: blur(4px); cursor: pointer;';
-    toast.innerHTML = `<div style="color:var(--blue); font-weight:bold; font-size:12px; margin-bottom:4px;">🚨 새로운 파티 모집</div>${item.message}`;
-    toast.onclick = () => toast.remove();
-    document.getElementById('party-toast-container').appendChild(toast);
-    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 5000);
-
-    if ('speechSynthesis' in window) {
-      const speech = new SpeechSynthesisUtterance(`${item.character_name} 님이 파티를 모집합니다. ${item.message}`);
-      speech.lang = 'ko-KR';
-      speech.rate = 1.1;
-      window.speechSynthesis.speak(speech);
-    }
+  // 1. 서버 필터링: 내가 류트를 골랐는데 만돌린 거뿔이 오면 컷! 
+  // (만약 '전체 서버' 상태라면 알림이 너무 많으니 아예 울리지 않게 막습니다)
+  const currentServer = getServer();
+  if (currentServer === 'all' || currentServer !== item.server_name) {
+    return;
   }
+
+  const container = document.getElementById('party-toast-container');
+
+  // 2. 테트리스 방지: 화면에 알림이 3개 이상 쌓이려 하면, 제일 오래된 걸 없애버립니다.
+  if (container.children.length >= 3) {
+    container.removeChild(container.firstChild);
+  }
+
+  // 3. 예쁘고 깔끔한 반투명 팝업창 (아까 찜하신 부드러운 다크모드 감성 한 스푼 추가!)
+  const toast = document.createElement('div');
+  toast.style.cssText = 'background:rgba(30, 36, 54, 0.95); border-left:4px solid var(--blue); color:#fff; padding:16px; border-radius:8px; box-shadow:0 8px 16px rgba(0,0,0,0.4); font-size:13px; width:280px; animation: slideIn 0.3s ease; backdrop-filter: blur(6px); cursor: pointer; transition: opacity 0.3s ease; margin-top: 10px;';
+  
+  toast.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span style="color:var(--blue); font-weight:bold; font-size:12px;">🚨 ${item.server_name} 파티 모집</span>
+      <span style="font-size:10px; color:var(--text3);">방금 전</span>
+    </div>
+    <div style="line-height:1.5; color:var(--text); word-break:keep-all;">${item.message}</div>
+  `;
+  
+  // 클릭하면 스르륵 사라지게 만들기
+  toast.onclick = () => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  };
+  
+  container.appendChild(toast);
+  
+  // 4초 뒤에 알아서 스르륵 사라짐
+  setTimeout(() => { 
+    if (toast.parentNode) {
+      toast.style.opacity = '0';
+      setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
+    }
+  }, 4000);
+
+  // 4. TTS 개선: 외계어 같은 거뿔 원문을 다 읽지 않고, 딱 이름만 깔끔하게 부르기!
+  if ('speechSynthesis' in window) {
+    // "뫄뫄 님이 파티를 모집합니다" 까지만 읽게 해서 소음(시끄러움)을 대폭 줄였습니다.
+    const speech = new SpeechSynthesisUtterance(`${item.character_name} 님이 파티를 모집합니다.`);
+    speech.lang = 'ko-KR';
+    speech.rate = 1.2; // 살짝 경쾌하고 빠르게
+    window.speechSynthesis.speak(speech);
+  }
+}
 
   async function fetchFeed(isLoadMore = false) {
     if (isFetchingFeed) return;
@@ -1746,7 +1784,7 @@
           const itemEl = renderFeedItem(item, isNewItem);
 
           // 🔥 새로 들어온 거뿔이고, 카테고리가 파티인 경우 알림 실행!
-          if (isNewItem && classify(item.message) === 'party') {
+          if (isNewItem && !isFirstLoad && classify(item.message) === 'party') {
             alertNewParty(item);
           }
 
@@ -1758,6 +1796,7 @@
         }
       });
 
+isFirstLoad = false;
       document.getElementById('feedMeta').innerHTML = `총 <span>${feed.querySelectorAll('.feed-item').length}</span>개 표시 중`;
       updateLobbyFeed(); 
 
