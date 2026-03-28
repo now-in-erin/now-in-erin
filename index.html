@@ -1675,6 +1675,9 @@
 </div>
 
 <script>
+// 🚨 사이트 딱! 켰을 때의 시간을 기록 (출근 도장)
+  const appStartTime = Date.now();
+
 // 💰 1만 숲 이상이면 알아서 '억/만 골드'로 바꿔주는 똑똑한 계산기!
   function formatMabiPrice(price, unit) {
     if (unit === '숲') {
@@ -1945,55 +1948,60 @@ function toggleTts() {
   }
 
   function alertNewParty(item) {
-  // 1. 현재 선택한 서버의 알림만 받기
-  const currentServer = getServer();
-  if (currentServer === 'all' || currentServer !== item.server_name) return;
+    const currentServer = getServer();
+    if (currentServer !== 'all' && currentServer !== '🌐 전체 서버' && currentServer !== item.server_name) return;
 
-  const container = document.getElementById('party-toast-container');
+    const msgTime = new Date(item.date_send).getTime();
+    
+    // 🚨 1. 사이트 접속(appStartTime) 이전에 작성된 거뿔은 화면에 새로 떠도 절대 안 울림!! 컷!!
+    if (msgTime < appStartTime) return; 
 
-  // 화면 중앙을 너무 가리지 않게 알림은 최대 2개까지만 표시
-  if (container.children.length >= 2) {
-    container.removeChild(container.firstChild);
-  }
+    // 🚨 2. 혹시 몰라 남겨두는 3분 안전장치 (접속 후 한참 뒤에 넥슨이 미쳐서 옛날 거 던질 때 대비)
+    const now = Date.now();
+    if (now - msgTime > 3 * 60 * 1000) return; 
 
-  // 2. 메시지에서 던전 이름 추론하기 (똑똑해진 AI!)
-  let dungeon = '';
-  const msg = item.message;
-  if (/브리|브레|4관|1[~-]3/.test(msg)) dungeon = '브리 레흐';
-  else if (/크롬|크일|크쉬/.test(msg)) dungeon = '크롬바스';
-  else if (/글렌|글매|글쉬/.test(msg)) dungeon = '글렌베르나';
-  else if (/몽라|몽환/.test(msg)) dungeon = '몽환의 라비';
-  else if (/교역|필발|왕복/.test(msg)) dungeon = '교역';
+    const container = document.getElementById('party-toast-container');
 
-  // 3. 중앙에서 부드럽게 떨어지는 팝업창
-  const toast = document.createElement('div');
-  toast.style.cssText = 'background:rgba(30, 36, 54, 0.95); border:1px solid var(--border); border-top:4px solid var(--blue); color:#fff; padding:16px 24px; border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,0.5); font-size:14px; width:340px; text-align:center; animation: dropDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); backdrop-filter: blur(8px); cursor: pointer; transition: opacity 0.3s ease; pointer-events: auto;';
-  
-  toast.innerHTML = `
-    <div style="color:var(--blue); font-weight:900; font-size:13px; margin-bottom:8px;">🚨 ${item.server_name} ${dungeon ? dungeon : '파티'} 모집</div>
-    <div style="line-height:1.4; color:var(--text); font-size:13px; word-break:keep-all;">${item.message}</div>
-  `;
-  
-  toast.onclick = () => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); };
-  container.appendChild(toast);
-  
-  setTimeout(() => { 
-    if (toast.parentNode) {
-      toast.style.opacity = '0';
-      setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
+    if (container.children.length >= 2) {
+      container.removeChild(container.firstChild);
     }
-  }, 4500);
 
-  // 4. TTS (토글 스위치가 켜져 있을 때만 읽음!)
-  if (isTtsEnabled && 'speechSynthesis' in window) {
-    const speechText = dungeon ? `${item.character_name}님이 ${dungeon} 파티를 모집해용.` : `${item.character_name}님이 파티를 모집해용.`;
-    const speech = new SpeechSynthesisUtterance(speechText);
-    speech.lang = 'ko-KR';
-    speech.rate = 1.2;   // 살짝 통통 튀게 빠른 속도
-    speech.pitch = 1.6;  // ⭐️ 여기서도 헬륨가스 투입!
-    window.speechSynthesis.speak(speech);
+    let dungeon = '';
+    const msg = item.message;
+    if (/브리|브레|4관|1[~-]3/.test(msg)) dungeon = '브리 레흐';
+    else if (/크롬|크일|크쉬/.test(msg)) dungeon = '크롬바스';
+    else if (/글렌|글매|글쉬/.test(msg)) dungeon = '글렌베르나';
+    else if (/몽라|몽환/.test(msg)) dungeon = '몽환의 라비';
+    else if (/교역|필발|왕복/.test(msg)) dungeon = '교역';
+
+    const toast = document.createElement('div');
+    toast.style.cssText = 'background:rgba(30, 36, 54, 0.95); border:1px solid var(--border); border-top:4px solid var(--blue); color:#fff; padding:16px 24px; border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,0.5); font-size:14px; width:340px; text-align:center; animation: dropDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); backdrop-filter: blur(8px); cursor: pointer; transition: opacity 0.3s ease; pointer-events: auto;';
+    
+    toast.innerHTML = `
+      <div style="color:var(--blue); font-weight:900; font-size:13px; margin-bottom:8px;">🚨 ${item.server_name} ${dungeon ? dungeon : '파티'} 모집</div>
+      <div style="line-height:1.4; color:var(--text); font-size:13px; word-break:keep-all;">${item.message}</div>
+    `;
+    
+    toast.onclick = () => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); };
+    container.appendChild(toast);
+    
+    setTimeout(() => { 
+      if (toast.parentNode) {
+        toast.style.opacity = '0';
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
+      }
+    }, 4500);
+
+    // 🚨 3. 음성 알림 스위치(isTtsEnabled)가 켜져 있을 때만 목소리로 읽어줌! (꺼져있으면 조용함)
+    if (isTtsEnabled && 'speechSynthesis' in window) {
+      const speechText = dungeon ? `${item.character_name}님이 ${dungeon} 파티를 모집해용.` : `${item.character_name}님이 파티를 모집해용.`;
+      const speech = new SpeechSynthesisUtterance(speechText);
+      speech.lang = 'ko-KR';
+      speech.rate = 1.2;  
+      speech.pitch = 1.6; 
+      window.speechSynthesis.speak(speech);
+    }
   }
-}
 
   async function fetchFeed(isLoadMore = false) {
     if (isFetchingFeed) return;
