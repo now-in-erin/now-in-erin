@@ -1160,6 +1160,13 @@
     }
 
     .guild-msg:last-child { border-bottom: none; }
+    
+    /* 👇 추가한 팝업 애니메이션 👇 */
+    @keyframes dropDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* 👆 여기까지 👆 */
   </style>
 </head>
 <body>
@@ -1695,54 +1702,51 @@
   }
 
   function alertNewParty(item) {
-  // 1. 서버 필터링: 내가 류트를 골랐는데 만돌린 거뿔이 오면 컷! 
-  // (만약 '전체 서버' 상태라면 알림이 너무 많으니 아예 울리지 않게 막습니다)
+  // 1. 현재 선택한 서버의 알림만 받기
   const currentServer = getServer();
-  if (currentServer === 'all' || currentServer !== item.server_name) {
-    return;
-  }
+  if (currentServer === 'all' || currentServer !== item.server_name) return;
 
   const container = document.getElementById('party-toast-container');
 
-  // 2. 테트리스 방지: 화면에 알림이 3개 이상 쌓이려 하면, 제일 오래된 걸 없애버립니다.
-  if (container.children.length >= 3) {
+  // 화면 중앙을 너무 가리지 않게 알림은 최대 2개까지만 표시
+  if (container.children.length >= 2) {
     container.removeChild(container.firstChild);
   }
 
-  // 3. 예쁘고 깔끔한 반투명 팝업창 (아까 찜하신 부드러운 다크모드 감성 한 스푼 추가!)
+  // 2. 메시지에서 던전 이름 추론하기 (똑똑해진 AI!)
+  let dungeon = '';
+  const msg = item.message;
+  if (/브리|브레|4관|1[~-]3/.test(msg)) dungeon = '브리 레흐';
+  else if (/크롬|크일|크쉬/.test(msg)) dungeon = '크롬바스';
+  else if (/글렌|글매|글쉬/.test(msg)) dungeon = '글렌베르나';
+  else if (/몽라|몽환/.test(msg)) dungeon = '몽환의 라비';
+  else if (/교역|필발|왕복/.test(msg)) dungeon = '교역';
+
+  // 3. 중앙에서 부드럽게 떨어지는 팝업창
   const toast = document.createElement('div');
-  toast.style.cssText = 'background:rgba(30, 36, 54, 0.95); border-left:4px solid var(--blue); color:#fff; padding:16px; border-radius:8px; box-shadow:0 8px 16px rgba(0,0,0,0.4); font-size:13px; width:280px; animation: slideIn 0.3s ease; backdrop-filter: blur(6px); cursor: pointer; transition: opacity 0.3s ease; margin-top: 10px;';
+  toast.style.cssText = 'background:rgba(30, 36, 54, 0.95); border:1px solid var(--border); border-top:4px solid var(--blue); color:#fff; padding:16px 24px; border-radius:12px; box-shadow:0 12px 24px rgba(0,0,0,0.5); font-size:14px; width:340px; text-align:center; animation: dropDown 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); backdrop-filter: blur(8px); cursor: pointer; transition: opacity 0.3s ease; pointer-events: auto;';
   
   toast.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-      <span style="color:var(--blue); font-weight:bold; font-size:12px;">🚨 ${item.server_name} 파티 모집</span>
-      <span style="font-size:10px; color:var(--text3);">방금 전</span>
-    </div>
-    <div style="line-height:1.5; color:var(--text); word-break:keep-all;">${item.message}</div>
+    <div style="color:var(--blue); font-weight:900; font-size:13px; margin-bottom:8px;">🚨 ${item.server_name} ${dungeon ? dungeon : '파티'} 모집</div>
+    <div style="line-height:1.4; color:var(--text); font-size:13px; word-break:keep-all;">${item.message}</div>
   `;
   
-  // 클릭하면 스르륵 사라지게 만들기
-  toast.onclick = () => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  };
-  
+  toast.onclick = () => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); };
   container.appendChild(toast);
   
-  // 4초 뒤에 알아서 스르륵 사라짐
   setTimeout(() => { 
     if (toast.parentNode) {
       toast.style.opacity = '0';
       setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
     }
-  }, 4000);
+  }, 4500);
 
-  // 4. TTS 개선: 외계어 같은 거뿔 원문을 다 읽지 않고, 딱 이름만 깔끔하게 부르기!
+  // 4. TTS (던전 이름 포함해서 읽어주기)
   if ('speechSynthesis' in window) {
-    // "뫄뫄 님이 파티를 모집합니다" 까지만 읽게 해서 소음(시끄러움)을 대폭 줄였습니다.
-    const speech = new SpeechSynthesisUtterance(`${item.character_name} 님이 파티를 모집합니다.`);
+    const speechText = dungeon ? `${item.character_name}님이 ${dungeon} 파티를 모집합니다.` : `${item.character_name}님이 파티를 모집합니다.`;
+    const speech = new SpeechSynthesisUtterance(speechText);
     speech.lang = 'ko-KR';
-    speech.rate = 1.2; // 살짝 경쾌하고 빠르게
+    speech.rate = 1.15; // 듣기 편한 속도
     window.speechSynthesis.speak(speech);
   }
 }
@@ -1776,6 +1780,7 @@
       if (loading && !isLoadMore) loading.remove();
 
       const displayItems = isLoadMore ? items : [...items].reverse();
+      const isInitialBulkLoad = displayItems.length > 10;
       displayItems.forEach(item => {
         const key = makeKey(item);
         if (!seenKeys.has(key)) {
@@ -2454,7 +2459,7 @@ isFirstLoad = false;
     .catch(() => setGlobalStatus('error', '서버 꺼짐'));
 </script>
 <!-- 파티 알림 팝업 컨테이너 -->
-<div id="party-toast-container" style="position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:10px;"></div>
+<div id="party-toast-container" style="position:fixed; top:80px; left:50%; transform:translateX(-50%); z-index:9999; display:flex; flex-direction:column; gap:10px; align-items:center; pointer-events:none;"></div>
 
 </body>
 </html>
