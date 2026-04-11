@@ -14,7 +14,7 @@ app.use(helmet());
 
 // 2. CORS 엄격하게 설정 (내 깃허브 사이트에서만 서버에 말 걸 수 있게 철벽 방어!)
 app.use(cors({
-  origin: ['https://now-in-erin.github.io', 'http://localhost:3000'],
+  origin: ['https://eun-hinaa.github.io/now-in-erin/', 'http://localhost:3000'],
   methods: ['GET']
 }));
 
