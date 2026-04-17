@@ -1326,15 +1326,23 @@
       font-weight: 900 !important;
     }
 
-    /* ── 풀페이지 스크롤 & 테마 연동 ── */
-.landing-overlay {
-    display: block !important;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scroll-snap-type: y mandatory;
-    scroll-behavior: smooth;
-    background: var(--bg);
-}
+    /* ── 풀페이지 스크롤 & 테마 연동 (수정됨) ── */
+    .landing-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: var(--bg);
+        overflow-y: auto;
+        overflow-x: hidden;
+        scroll-snap-type: y mandatory;
+        scroll-behavior: smooth;
+        /* 👇 display: block !important; 삭제 완료 👇 */
+        display: block; 
+    }
+
+    .landing-overlay.hidden {
+        display: none !important;
+    }
 
 .landing-section {
     position: relative;
@@ -1499,14 +1507,20 @@
       <div class="intro-title reveal delay-1">데이터로 꿰뚫어 보는<br><span>밀레시안의 정체</span></div>
       <div class="intro-desc reveal delay-2">
         거뿔 속에 숨겨진 당신의 플레이 스타일을 AI가 완벽하게 분석합니다.<br>
-        나와 100% 일치하는 '운명의 유저'를 찾아보세요.
+        나와 싱크로율 100%인 '운명의 유저'를 찾아보세요.
       </div>
+      
       <div class="mockup-card reveal delay-2">
         <div style="color:var(--gold); font-weight:900; margin-bottom:10px;">👤 분석 결과: 별하</div>
-        <div style="font-size:18px; color:var(--text); margin-bottom:8px;">「 기만형 브리 레흐 공장장 」</div>
-        <div style="font-size:13px; color:var(--text2);">"뉴비라고 주장하지만 인벤토리에는 파멸의 로브가 가득하군요..."</div>
+        <div style="font-size:18px; color:var(--text); margin-bottom:8px;">「 에린을 관측하는 수석 기획자 」</div>
+        <div style="font-size:13px; color:var(--text2); line-height: 1.6;">"진성 친목러가 에린의 친목러들을 위해 직접 깎아 만들었습니다. 뉴비 환영! 많관부!"</div>
+        
+        <div style="margin-top:14px; display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
+          <span style="background:rgba(var(--gold-rgb, 244, 162, 97), 0.1); border:1px solid rgba(var(--gold-rgb, 244, 162, 97), 0.3); border-radius:20px; padding:4px 10px; font-size:11px; color:var(--gold);">#프로친목러</span>
+          <span style="background:rgba(var(--gold-rgb, 244, 162, 97), 0.1); border:1px solid rgba(var(--gold-rgb, 244, 162, 97), 0.3); border-radius:20px; padding:4px 10px; font-size:11px; color:var(--gold);">#이페이지개발자</span>
+        </div>
       </div>
-    </div>
+      </div>
   </section>
 
   <section class="landing-section">
@@ -1887,7 +1901,11 @@
 
   function selectServer(server) {
     document.getElementById('globalServer').value = server;
-    document.getElementById('landingOverlay').classList.add('hidden');
+    
+    // 🚨 랜딩 페이지 강제 철거! (확인 사살)
+    const overlay = document.getElementById('landingOverlay');
+    overlay.style.display = 'none'; 
+    overlay.classList.add('hidden');
     
     updateLobbyData();
 
