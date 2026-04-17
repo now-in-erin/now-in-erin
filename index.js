@@ -710,36 +710,31 @@ app.get('/api/stats/market', async (req, res) => {
     const result = await pool.query(query, params);
     const trades = [];
     
-    // 마비노기식 거래 정규표현식 개선
-    const tradeRegex = /(.*?)\s+([0-9]+(?:\.[0-9]+)?)\s*(억|숲|만|골드|수표)\s*(팝니다|삽니다|판매|구매|팜|삼|팔아요|사요)/;
+    // 🚨 기존의 깐깐했던 tradeRegex 코드를 지우고 아래 무적 코드로 덮어씌우세요!
+    const tradeRegex = /(.*?)(?:[\s:]+)([0-9]{1,5}(?:\.[0-9]{1,2})?)\s*(억|숲|만|골드|수표)?(?:에|으로|에만|씩)?\s*(팝니다|삽니다|판매|구매|팜|삼|팔아요|사요)/;
 
     result.rows.forEach(r => {
       const match = r.message.match(tradeRegex);
       if (match) {
         let item = match[1].replace(/^[\[\(<【].*?[\]\)>】]/, '').replace(/[~!@#$^&*]/g, '').trim();
         const rawNum = match[2];
-        const unit = match[3];
+        const unit = match[3]; // '억'이나 '숲'을 안 썼으면 undefined가 됨
         const action = match[4].includes('사') || match[4].includes('구매') || match[4].includes('삼') ? '구매' : '판매';
         
-        // 🔥 일반 거래에서도 블랙마켓과 동일한 환산 로직 적용
+        // 🔥 기적의 마비노기 수학법 (단위가 없어도 10 미만이면 '억', 이상이면 '숲'으로 찰떡같이 계산)
         const priceSoop = (numStr, unitStr) => {
           let num = parseFloat(numStr);
           if (unitStr === '억') return num * 10000;
           if (unitStr === '만' || unitStr === '숲') return num;
-          if (num < 10) return num * 10000;
-          return num;
+          if (num < 10) return num * 10000; 
+          return num; 
         };
 
         if (item.length > 1) {
           trades.push({
-            server: r.server_name, 
-            character: r.character_name,
-            item: item, 
-            price: priceSoop(rawNum, unit), 
-            unit: '숲', 
-            action: action,
-            time: r.date_send, 
-            original: r.message
+            server: r.server_name, character: r.character_name,
+            item: item, price: priceSoop(rawNum, unit), unit: '숲', 
+            action: action, time: r.date_send, original: r.message
           });
         }
       }
