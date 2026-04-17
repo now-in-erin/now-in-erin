@@ -1424,6 +1424,40 @@
     animation: scrollMove 2s infinite;
 }
 @keyframes scrollMove { 0% { top: 8px; opacity: 1; } 100% { top: 20px; opacity: 0; } }
+
+/* 🚨 1. 철벽 방어 해제! (자바스크립트가 숨기라고 하면 즉시 숨도록 강제) */
+.landing-overlay.hidden {
+  display: none !important;
+}
+
+/* 🚨 2. 잃어버린 서버 4형제 예쁘게 부활시키는 CSS */
+.landing-question {
+  font-size: 16px; color: var(--text2); margin-top: 36px; margin-bottom: 16px; font-weight: 500;
+}
+
+.server-btn-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; max-width: 360px; margin: 0 auto 20px; width: 100%;
+}
+
+.server-btn {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 16px;
+  cursor: pointer; transition: all 0.2s; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.server-btn:hover {
+  border-color: var(--gold); background: rgba(184,134,11,0.05); transform: translateY(-2px);
+}
+
+.server-btn-name { font-size: 18px; font-weight: 900; color: var(--text); margin-bottom: 4px; }
+.server-btn-desc { font-size: 11px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+.server-btn-king { font-size: 12px; color: var(--gold); margin-top: 10px; font-weight: 700; }
+
+.landing-all-btn {
+  background: transparent; border: 1px solid var(--border); color: var(--text3);
+  padding: 10px 24px; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-family: 'Noto Sans KR', sans-serif;
+}
+
+.landing-all-btn:hover { color: var(--text); border-color: var(--gold); }
   </style>
 </head>
 <body>
@@ -1455,7 +1489,7 @@
         </div>
       </div>
       <button class="landing-all-btn" onclick="selectServer('all')">전체 서버 보기</button>
-    </div>
+      </div>
     <div class="mouse-icon"></div>
   </section>
 
