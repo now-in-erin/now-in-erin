@@ -915,11 +915,24 @@ app.get('/api/admin/pre-analyze', async (req, res) => {
         // 제미니 호출 (아까 수정한 1.5-flash 버전과 JSON 강제 옵션 사용)
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { responseMimeType: "application/json" } });
         
-        // 🚨 유죄 방지 매너 프롬프트 장착 완료!
-        const prompt = `너는 마비노기 유저 프로파일러야. 다음 JSON 형식으로만 답변해: { "type": "칭호", "description": "분석", "keywords": ["키워드1",...,"키워드4"], "activeTime": "시간", "mainActivity": "활동" }\n\n[🚨절대 규칙🚨] 부정적 단어(빌런, 비매너 등) 절대 금지. 유쾌하고 둥글게 포장해. 본문 단어 단순 추출 금지. 성향을 유추한 밈 해시태그(예: #새벽반, #자본주의) 창작.\n\n[데이터]\n${messages}`;
+        // 👇 여기부터 👇
+      const prompt = `너는 마비노기 유저 프로파일러야. 다음 JSON 형식의 "값(Value)" 부분을 너의 분석으로 채워서 답변해:
+      
+      { 
+        "type": "유저에게 어울리는 센스있는 칭호 (예: 낭만 가득한 브리 레흐 요정)", 
+        "description": "유저의 플레이 성향에 대한 유쾌하고 상세한 분석 내용", 
+        "keywords": ["#밈해시태그1", "#밈해시태그2", "#밈해시태그3", "#밈해시태그4"], 
+        "activeTime": "주로 활동하는 시간대", 
+        "mainActivity": "주요 활동 내용" 
+      }
 
-        const aiResponse = await model.generateContent(prompt);
-        const analysis = JSON.parse(aiResponse.response.text());
+      [🚨절대 규칙🚨] 
+      1. JSON의 key 값에 "칭호", "분석" 이라는 단어를 그대로 적지 마! 반드시 네가 창작한 내용을 적어.
+      2. 부정적 단어(빌런, 비매너 등) 절대 금지. 유쾌하고 둥글게 포장할 것. 
+      3. 본문 단어 단순 추출 금지. 대화 패턴으로 성향을 유추한 밈 해시태그(예: #새벽반, #자본주의)를 창작할 것.
+
+      [데이터]\n${messages}`;
+      // 👆 여기까지 👆
 
         // DB에 몰래 저장
         await pool.query(`
@@ -937,6 +950,16 @@ app.get('/api/admin/pre-analyze', async (req, res) => {
     }
     console.log(`🎉 [오픈 준비 끝] 일괄 분석이 모두 완료되었습니다!`);
   } catch (e) { console.error('일괄 분석 에러:', e); }
+});
+
+// 🚨 [관리자 전용] 불량 AI 데이터 싹 밀어버리기 (초기화)
+app.get('/api/admin/reset-analysis', async (req, res) => {
+  try {
+    await pool.query('TRUNCATE TABLE user_analysis;');
+    res.send('<h2>🧹 불량 분석 데이터 초기화 완료! DB가 깨끗해졌습니다.</h2>');
+  } catch (err) {
+    res.send(`에러 발생: ${err.message}`);
+  }
 });
 
 async function start() {
