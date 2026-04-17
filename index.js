@@ -788,93 +788,98 @@ app.get('/api/user/:name', async (req, res) => {
   }
 });
 
-// AI 분석 (메타데이터 + 고인물 프롬프트 적용된 매운맛 버전)
+// 1. AI 분석 API 수술 (방탄 처리 + DB 저장)
 app.get('/api/user/:name/analyze', async (req, res) => {
   const name = req.params.name;
   if (!genAI) return res.status(500).json({ error: 'Gemini API 키가 없어요' });
 
   try {
     const result = await pool.query(`
-      SELECT message, category, date_send, server_name 
-      FROM horn
-      WHERE character_name = $1 
-      ORDER BY date_send DESC 
-      LIMIT 100
+      SELECT message, category, date_send, server_name FROM horn
+      WHERE character_name = $1 ORDER BY date_send DESC LIMIT 100
     `, [name]);
 
     const rows = result.rows;
     if (rows.length === 0) return res.json({ found: false });
 
-    const total = rows.length;
+    // 통계 및 메시지 정리 (기존 로직 유지)
     let partyCount = 0, tradeCount = 0, guildCount = 0, etcCount = 0;
-    const hourMap = new Array(24).fill(0);
-
     const messages = rows.map(r => {
       if (r.category === 'party') partyCount++;
       else if (r.category === 'trade') tradeCount++;
       else if (r.category === 'guild') guildCount++;
       else etcCount++;
-
-      const h = (new Date(r.date_send).getUTCHours() + 9) % 24;
-      hourMap[h]++;
-      return `[${h}시] ${r.message}`;
+      return `[${new Date(r.date_send).getHours()}시] ${r.message}`;
     }).join('\n');
 
-    const peakHour = hourMap.indexOf(Math.max(...hourMap));
-    const mainCategory = Object.entries({ 파티: partyCount, 거래: tradeCount, 길드홍보: guildCount, 일반잡담: etcCount })
-      .sort((a, b) => b[1] - a[1])[0][0];
-
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const prompt = `유저 "${name}"의 마비노기 거뿔 분석. 다음 JSON 형식으로만 답변해: { "type": "칭호", "description": "분석", "keywords": ["키워드1",...,"키워드10"], "activeTime": "시간", "mainActivity": "활동" }\n\n데이터:\n${messages}`;
 
-    const prompt = `
-너는 마비노기 20년 차 초고인물 밀레시안이야.
-다음은 유저 "${name}"의 최근 거뿔(전체 채팅) 기록과 통계 데이터야.
+    const aiResponse = await model.generateContent(prompt);
+    const rawText = aiResponse.response.text();
+    
+    // 🛡️ 핵심: 제미니가 앞에 헛소리를 붙여도 { } 부분만 정확히 찾아냄
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("AI 응답 형식이 올바르지 않습니다.");
+    
+    const analysis = JSON.parse(jsonMatch[0]);
 
-[유저 통계 힌트]
-- 가장 거뿔을 많이 부는 시간: ${peakHour}시
-- 가장 많이 쓰는 거뿔 목적: ${mainCategory} (파티:${partyCount}, 거래:${tradeCount}, 길드:${guildCount}, 일반:${etcCount})
+    // 💾 DB에 저장 (유사 유저 검색용)
+    await pool.query(`
+      INSERT INTO user_analysis (character_name, keywords, analysis_json, updated_at)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (character_name) DO UPDATE SET keywords = EXCLUDED.keywords, analysis_json = EXCLUDED.analysis_json, updated_at = NOW()
+    `, [name, analysis.keywords, analysis]);
 
-[최근 거뿔 내용]
-${messages}
-
-이 데이터를 바탕으로 이 유저의 에린 플레이 스타일을 아주 날카롭고 재밌게 프로파일링 해줘.
-
-🚨 [절대 지켜야 할 마비노기 분석 룰] 🚨
-1. 고인물의 '뉴비 호소' 기만: 마비노기 고인물들은 본인을 '뉴비'라고 기만하는 문화가 있어. 거뿔에 "뉴비 사냥가고 싶어요"라고 적혀 있어도, 브리 레흐, 크롬바스, 글렌베르나 같은 최상위 던전 파티를 구하고 있다면 그건 100% 썩은물(고인물)의 앙탈이야. 절대 속아서 '초보', '테흐 두인 입문자'라고 분석하지 마!
-2. 던전 이름 창조 금지: '브리'는 무조건 '브리 레흐' 던전을 뜻해. '브리흐네', '브리흐네 릴레이 미션' 같은 이상한 던전 이름을 절대 창조하지 마.
-3. 마비노기 용어 및 은어 사전:
-   - 뀨 = 구구 = 구슬구매 (파티 참여 조건으로 자기가 입장 재화(구슬)를 돈 주고 사겠다는 뜻. 재력가 전투광임)
-   - 1릴, 2릴 = 1번 반복, 2번 반복 사냥
-   - 세바 = 세인트 바드, 세가 = 세이크리드 가드, 엘나 = 엘레멘탈 나이트, 닼메 = 다크 메이지, 퓨파/뜌따 = 퓨리 파이터
-   - 숲 = 인게임 수표 (고액 화폐)
-
-[마비노기 유저 유형 가이드라인]
-- 전투광 / 결사대장: 브리 레흐 등 최상위 던전을 돌며 '뀨(구슬)' 구매까지 불사하는 진성 전투광. (특징: 뉴비 코스프레)
-- 다클라 쌀먹러: 폐지 줍기, 숲(골드) 판매
-- 에린의 거상: 혐사, 경매장 수수료 아끼려고 거뿔로 비싼 템 거래
-- 확성기 빌런(뻘뿔러): 새벽에 쓸데없는 잡담 낭비
-
-아래 JSON 형식으로만 딱 떨어지게 답변해. 다른 말은 절대 추가하지 마.
-{
-  "type": "유저 칭호 (예: 뉴비 코스프레하는 브리 레흐 공장장, 구슬 물주 뜌따, 던바튼 1채널 거상 등 재미있게)",
-  "description": "이 유저는 어떤 스타일로 게임을 즐기는지 마비노기 세계관에 맞게 2~3문장으로 재미있게 요약",
-  "traits": ["핵심 특징 1 (예: 지독한 기만자)", "핵심 특징 2 (예: 뀨(구슬) 구매 불사함)", "핵심 특징 3"],
-  "activeTime": "주로 언제 접속하는지 (예: 저녁 피크타임)",
-  "mainActivity": "이 유저가 마비노기에서 주로 하는 짓"
-}`;
-
-    const result2 = await model.generateContent(prompt);
-    const text = result2.response.text().replace(/```json|```/g, '').trim();
-    const analysis = JSON.parse(text);
-
-    res.json({ found: true, name, total: rows.length, analysis });
+    res.json({ found: true, name, analysis });
   } catch (e) {
     console.error('[AI 분석 오류]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-//
+// 2. 유사 유저 찾기 API 추가
+app.get('/api/user/:name/similar', async (req, res) => {
+  const name = req.params.name;
+  try {
+    const userRes = await pool.query('SELECT keywords FROM user_analysis WHERE character_name = $1', [name]);
+    if (userRes.rows.length === 0) return res.json({ similar: [] });
+
+    const userKeywords = userRes.rows[0].keywords;
+    const similarRes = await pool.query(`
+      SELECT character_name, (SELECT COUNT(*) FROM unnest(keywords) k WHERE k = ANY($1)) as match_count
+      FROM user_analysis WHERE character_name != $1 ORDER BY match_count DESC LIMIT 5
+    `, [userKeywords]);
+
+    res.json({ similar: similarRes.rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/user/:name/similar', async (req, res) => {
+  const name = req.params.name;
+  try {
+    // 1. 현재 유저의 키워드 가져오기
+    const userRes = await pool.query('SELECT keywords FROM user_analysis WHERE character_name = $1', [name]);
+    if (userRes.rows.length === 0) return res.json({ similar: [] });
+
+    const userKeywords = userRes.rows[0].keywords;
+
+    // 2. 키워드가 겹치는 다른 유저 찾기 (PostgreSQL Array Overlap 사용)
+    const similarRes = await pool.query(`
+      SELECT character_name, keywords, (
+        SELECT COUNT(*) FROM unnest(keywords) k WHERE k = ANY($1)
+      ) as match_count
+      FROM user_analysis
+      WHERE character_name != $1
+      ORDER BY match_count DESC
+      LIMIT 5
+    `, [userKeywords]);
+
+    res.json({ similar: similarRes.rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 async function start() {
   await initDB();
