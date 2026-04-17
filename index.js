@@ -834,7 +834,16 @@ app.get('/api/user/:name/analyze', async (req, res) => {
       generationConfig: { responseMimeType: "application/json" } 
     });
 
-    const prompt = `유저 "${name}"의 마비노기 거뿔 분석. 다음 JSON 형식으로만 답변해: { "type": "칭호", "description": "분석", "keywords": ["키워드1",...,"키워드10"], "activeTime": "시간", "mainActivity": "활동" }\n\n데이터:\n${messages}`;
+    const prompt = `너는 마비노기 유저 프로파일러야. 아래 유저 "${name}"의 거뿔 데이터를 분석해서 반드시 JSON 형식으로만 답변해.
+
+    [JSON 요구사항]
+    1. "type": 유저의 성향을 나타내는 재미있는 칭호 (절대 '칭호'라는 단어 쓰지 말 것. 예: 낭만 가득한 요정)
+    2. "description": 유저의 플레이 성향에 대한 유쾌한 분석 내용 2~3문장 (절대 '분석'이라는 단어 쓰지 말 것)
+    3. "keywords": 유저 성향을 나타내는 밈(meme) 해시태그 4개 (단순 단어 추출 절대 금지. 반드시 #자본주의, #새벽반 처럼 성향을 유추해서 창작할 것)
+    4. "activeTime": 주로 활동하는 시간대
+    5. "mainActivity": 주로 하는 활동
+
+    [데이터]\n${messages}`;
 
     const aiResponse = await model.generateContent(prompt);
     const rawText = aiResponse.response.text();
@@ -922,13 +931,14 @@ app.get('/api/admin/start-safe', async (req, res) => {
 
         const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { responseMimeType: "application/json" } });
         
-        const prompt = `너는 마비노기 유저 프로파일러야. 다음 JSON 형식의 "값(Value)" 부분을 너의 분석으로 채워서 답변해:
-        { 
-          "type": "유저에게 어울리는 센스있는 칭호 (예: 낭만 가득한 브리 레흐 요정)", 
-          "description": "유저의 플레이 성향에 대한 유쾌하고 상세한 분석 내용", 
-          "keywords": ["#밈해시태그1", "#밈해시태그2", "#밈해시태그3", "#밈해시태그4"], 
-          "activeTime": "주로 활동하는 시간대", 
-          "mainActivity": "주요 활동 내용" 
+        const prompt = `너는 마비노기 유저 프로파일러야. 아래 유저 "${name}"의 거뿔 데이터를 분석해서 반드시 JSON 형식으로만 답변해.
+
+        [JSON 요구사항]
+        1. "type": 유저의 성향을 나타내는 재미있는 칭호 (절대 '칭호'라는 단어 쓰지 말 것. 예: 낭만 가득한 요정)
+        2. "description": 유저의 플레이 성향에 대한 유쾌한 분석 내용 2~3문장 (절대 '분석'이라는 단어 쓰지 말 것)
+        3. "keywords": 유저 성향을 나타내는 밈(meme) 해시태그 4개 (단순 단어 추출 절대 금지. 반드시 #자본주의, #새벽반 처럼 성향을 유추해서 창작할 것)
+        4. "activeTime": 주로 활동하는 시간대
+        5. "mainActivity": 주로 하는 활동
         }
         [🚨절대 규칙🚨] 
         1. JSON의 key 값에 "칭호", "분석" 이라는 단어를 그대로 적지 마! 반드시 네가 창작한 내용을 적어.
