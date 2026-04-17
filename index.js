@@ -120,9 +120,14 @@ async function fetchServer(serverName) {
 }
 
 async function fetchAll() {
-  console.log('📡 전 서버 데이터 동시 발굴 시작...');
-  // 🔥 모든 서버를 동시에 찌릅니다. 하나가 늦어져도 나머지는 수집됩니다.
-  await Promise.all(SERVERS.map(server => fetchServer(server)));
+  console.log('📡 전 서버 데이터 순차 발굴 시작... (메모리 절약 모드)');
+  
+  for (const server of SERVERS) {
+    await fetchServer(server);
+    // 💡 다음 서버 거뿔을 긁어오기 전에 3초 동안 숨 고르기 (메모리 쉴 시간 주기)
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  }
+  console.log('✅ 전 서버 발굴 완료!');
 }
 
 // ── API 엔드포인트 생략 (기존 코드와 동일하게 유지) ──
