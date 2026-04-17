@@ -883,6 +883,62 @@ app.get('/api/user/:name/similar', async (req, res) => {
   }
 });
 
+// 🚨 [관리자 전용] 오픈 전 미리 DB에 AI 분석 결과 채워넣기 (콜드 스타트 방지)
+app.get('/api/admin/pre-analyze', async (req, res) => {
+  const limit = parseInt(req.query.limit) || 50; // 기본 50명
+  
+  // 브라우저에는 바로 '작업 시작' 안내를 띄워주고, 서버 혼자 백그라운드에서 일하게 둡니다.
+  res.send(`<h2>✅ 쉿! 에린의 고인물 상위 ${limit}명 일괄 분석을 백그라운드에서 시작합니다.</h2><p>구글 API 제한을 피하기 위해 6초에 1명씩 천천히 분석합니다. 창을 닫아도 서버는 계속 일합니다!</p>`);
+
+  try {
+    // 1. 이미 분석된 사람은 빼고, 거뿔을 가장 많이 분 상위 유저들만 쏙쏙 뽑아옵니다.
+    const topUsers = await pool.query(`
+      SELECT character_name 
+      FROM horn 
+      WHERE character_name NOT IN (SELECT character_name FROM user_analysis)
+      GROUP BY character_name 
+      ORDER BY COUNT(*) DESC 
+      LIMIT $1
+    `, [limit]);
+
+    console.log(`[오픈 준비] ${topUsers.rows.length}명 일괄 분석 시작...`);
+
+    // 2. 구글 눈치채지 못하게 6초에 1명씩(1분에 10명) 천천히 분석 루프를 돕니다.
+    for (let i = 0; i < topUsers.rows.length; i++) {
+      const name = topUsers.rows[i].character_name;
+      
+      try {
+        // 해당 유저 거뿔 가져오기
+        const userMsgRes = await pool.query(`SELECT message FROM horn WHERE character_name = $1 ORDER BY date_send DESC LIMIT 50`, [name]);
+        const messages = userMsgRes.rows.map(r => r.message).join('\n');
+
+        // 제미니 호출 (아까 수정한 1.5-flash 버전과 JSON 강제 옵션 사용)
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', generationConfig: { responseMimeType: "application/json" } });
+        
+        // 🚨 유죄 방지 매너 프롬프트 장착 완료!
+        const prompt = `너는 마비노기 유저 프로파일러야. 다음 JSON 형식으로만 답변해: { "type": "칭호", "description": "분석", "keywords": ["키워드1",...,"키워드4"], "activeTime": "시간", "mainActivity": "활동" }\n\n[🚨절대 규칙🚨] 부정적 단어(빌런, 비매너 등) 절대 금지. 유쾌하고 둥글게 포장해. 본문 단어 단순 추출 금지. 성향을 유추한 밈 해시태그(예: #새벽반, #자본주의) 창작.\n\n[데이터]\n${messages}`;
+
+        const aiResponse = await model.generateContent(prompt);
+        const analysis = JSON.parse(aiResponse.response.text());
+
+        // DB에 몰래 저장
+        await pool.query(`
+          INSERT INTO user_analysis (character_name, keywords, analysis_json, updated_at)
+          VALUES ($1, $2, $3, NOW())
+        `, [name, analysis.keywords, analysis]);
+        
+        console.log(`[${i+1}/${topUsers.rows.length}] ${name} 분석 완료!`);
+      } catch (err) {
+        console.error(`[${name} 분석 실패]`, err.message);
+      }
+      
+      // 💡 핵심: 1명 분석 끝날 때마다 6초(6000ms) 휴식 -> 구글 429 에러 완벽 회피
+      await new Promise(resolve => setTimeout(resolve, 6000));
+    }
+    console.log(`🎉 [오픈 준비 끝] 일괄 분석이 모두 완료되었습니다!`);
+  } catch (e) { console.error('일괄 분석 에러:', e); }
+});
+
 async function start() {
   await initDB();
   app.listen(PORT, () => { console.log(`\n🎺 백엔드 서버 시작 (포트: ${PORT})`); fetchAll(); });
