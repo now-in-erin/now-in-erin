@@ -715,12 +715,13 @@ app.get('/api/stats/blackmarket', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── 💰 일반 거뿔 거래 시세 (Market API) ──
+// 💰 일반 거뿔 거래 시세 (Market API) - 구매/판매 완벽 분류!
 app.get('/api/stats/market', async (req, res) => {
   const { server, days } = req.query;
   const since = new Date(Date.now() - (parseInt(days) || 1) * 24 * 60 * 60 * 1000).toISOString();
   
-  let query = `SELECT server_name, character_name, message, date_send FROM horn WHERE (category = 'trade' OR message ~ '팝니다|삽니다|판매|구매|팜|삼|팔아요|사요') AND date_send >= $1`;
+  // 🔥 '구함', '구입', '삽' 등 구매 관련 은어 모조리 추가!
+  let query = `SELECT server_name, character_name, message, date_send FROM horn WHERE (category = 'trade' OR message ~ '팝니다|삽니다|판매|구매|구입|구함|구해|팜|삼|팝|삽|팔아요|사요') AND date_send >= $1`;
   const params = [since];
   
   if (server && server !== 'all') { 
@@ -734,18 +735,20 @@ app.get('/api/stats/market', async (req, res) => {
     const result = await pool.query(query, params);
     const trades = [];
     
-    // 🚨 기존의 깐깐했던 tradeRegex 코드를 지우고 아래 무적 코드로 덮어씌우세요!
-    const tradeRegex = /(.*?)(?:[\s:]+)([0-9]{1,5}(?:\.[0-9]{1,2})?)\s*(억|숲|만|골드|수표)?(?:에|으로|에만|씩)?\s*(팝니다|삽니다|판매|구매|팜|삼|팔아요|사요)/;
+    // 🚨 무적의 정규식: 구함, 구합니다, 구입, 구해, 팝, 삽 완벽 추가!
+    const tradeRegex = /(.*?)(?:[\s:]+)([0-9]{1,5}(?:\.[0-9]{1,2})?)\s*(억|숲|만|골드|수표)?(?:에|으로|에만|씩)?\s*(팝니다|삽니다|판매|구매|구입|구함|구합니다|구해|팜|삼|팔아요|사요|팝|삽)/;
 
     result.rows.forEach(r => {
       const match = r.message.match(tradeRegex);
       if (match) {
         let item = match[1].replace(/^[\[\(<【].*?[\]\)>】]/, '').replace(/[~!@#$^&*]/g, '').trim();
         const rawNum = match[2];
-        const unit = match[3]; // '억'이나 '숲'을 안 썼으면 undefined가 됨
-        const action = match[4].includes('사') || match[4].includes('구매') || match[4].includes('삼') ? '구매' : '판매';
+        const unit = match[3]; 
         
-        // 🔥 기적의 마비노기 수학법 (단위가 없어도 10 미만이면 '억', 이상이면 '숲'으로 찰떡같이 계산)
+        // 🔥 핵심 수술 부위: '사', '삽', '삼', '구' 글자가 하나라도 들어가면 100% 구매! 그 외는 판매!
+        const actionStr = match[4];
+        const action = /사|삽|삼|구/.test(actionStr) ? '구매' : '판매';
+        
         const priceSoop = (numStr, unitStr) => {
           let num = parseFloat(numStr);
           if (unitStr === '억') return num * 10000;
