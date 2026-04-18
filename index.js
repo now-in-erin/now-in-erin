@@ -868,31 +868,37 @@ app.get('/api/user/:name/analyze', async (req, res) => {
 });
 
 
-// 👥 나와 비슷한 밀레시안 찾기 API (버그 수정 + 정확도 1000% 향상)
+// 👥 [수정본] 서버 이름과 10개 키워드를 완벽하게 지원하는 API
 app.get('/api/user/:name/similar', async (req, res) => {
   const name = req.params.name;
   try {
-    // 1. 현재 유저의 키워드 가져오기
     const userRes = await pool.query('SELECT keywords FROM user_analysis WHERE character_name = $1', [name]);
     if (userRes.rows.length === 0) return res.json({ similar: [] });
 
     const userKeywords = userRes.rows[0].keywords;
 
-    // 2. 키워드가 겹치는 다른 유저 찾기 (PostgreSQL Array Overlap 사용)
+    // 🔥 핵심: user_analysis(a)와 horn(h) 테이블을 합쳐서 서버 이름을 가져옵니다.
     const similarRes = await pool.query(`
-      SELECT character_name, keywords, (
-        SELECT COUNT(*) FROM unnest(keywords) k WHERE k = ANY($1::text[])
-      ) as match_count
-      FROM user_analysis
-      WHERE character_name != $2 
-        AND keywords && $1::text[] -- 🔥 핵심: 단 1개라도 겹치는 키워드가 있는 사람만 뽑아옴!
+      SELECT 
+        a.character_name, 
+        a.keywords, 
+        h.server_name,
+        (SELECT COUNT(*) FROM unnest(a.keywords) k WHERE k = ANY($1::text[])) as match_count
+      FROM user_analysis a
+      LEFT JOIN (
+        SELECT character_name, MAX(server_name) as server_name 
+        FROM horn 
+        GROUP BY character_name
+      ) h ON a.character_name = h.character_name
+      WHERE a.character_name != $2 
+        AND a.keywords && $1::text[]
       ORDER BY match_count DESC
       LIMIT 5
-    `, [userKeywords, name]); // 🔥 변수 분리! $1은 키워드 배열, $2는 닉네임
+    `, [userKeywords, name]);
 
     res.json({ similar: similarRes.rows });
   } catch (e) {
-    console.error(`[비슷한 밀레시안 찾기 에러 - ${name}]`, e.message);
+    console.error(`[비슷한 밀레시안 찾기 에러]`, e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -1045,14 +1051,15 @@ app.get('/api/admin/start-safe', async (req, res) => {
         [JSON 요구사항]
         1. "type": 유저의 성향을 나타내는 재미있는 칭호 (절대 '칭호'라는 단어 쓰지 말 것. 예: 낭만 가득한 요정)
         2. "description": 유저의 플레이 성향에 대한 유쾌한 분석 내용 2~3문장 (절대 '분석'이라는 단어 쓰지 말 것)
-        3. "keywords": 유저 성향을 나타내는 밈(meme) 해시태그 4개 (단순 단어 추출 절대 금지. 반드시 #자본주의, #새벽반 처럼 성향을 유추해서 창작할 것)
+        3. "keywords": 유저 성향을 나타내는 밈(meme) 해시태그 **반드시 10개** (예: #새벽반, #자본주의, #자캐덕후 등 성향을 유추해서 10개를 꽉 채워)
         4. "activeTime": 주로 활동하는 시간대
         5. "mainActivity": 주로 하는 활동
 
-[🚨절대 규칙🚨] 
+        [🚨절대 규칙🚨] 
         1. JSON의 key 값에 "칭호", "분석" 이라는 단어를 그대로 적지 마! 반드시 네가 창작한 내용을 적어.
         2. 부정적 단어(빌런, 비매너 등) 절대 금지. 유쾌하고 둥글게 포장할 것. 
         3. 본문 단어 단순 추출 금지. 대화 패턴으로 성향을 유추한 밈 해시태그(예: #새벽반, #자본주의)를 창작할 것.
+
         [데이터]\n${messages}`;
 
         const aiResponse = await model.generateContent(prompt);
