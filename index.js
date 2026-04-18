@@ -868,6 +868,7 @@ app.get('/api/user/:name/analyze', async (req, res) => {
 });
 
 
+// 👥 나와 비슷한 밀레시안 찾기 API (버그 수정 + 정확도 1000% 향상)
 app.get('/api/user/:name/similar', async (req, res) => {
   const name = req.params.name;
   try {
@@ -880,16 +881,18 @@ app.get('/api/user/:name/similar', async (req, res) => {
     // 2. 키워드가 겹치는 다른 유저 찾기 (PostgreSQL Array Overlap 사용)
     const similarRes = await pool.query(`
       SELECT character_name, keywords, (
-        SELECT COUNT(*) FROM unnest(keywords) k WHERE k = ANY($1)
+        SELECT COUNT(*) FROM unnest(keywords) k WHERE k = ANY($1::text[])
       ) as match_count
       FROM user_analysis
-      WHERE character_name != $1
+      WHERE character_name != $2 
+        AND keywords && $1::text[] -- 🔥 핵심: 단 1개라도 겹치는 키워드가 있는 사람만 뽑아옴!
       ORDER BY match_count DESC
       LIMIT 5
-    `, [userKeywords]);
+    `, [userKeywords, name]); // 🔥 변수 분리! $1은 키워드 배열, $2는 닉네임
 
     res.json({ similar: similarRes.rows });
   } catch (e) {
+    console.error(`[비슷한 밀레시안 찾기 에러 - ${name}]`, e.message);
     res.status(500).json({ error: e.message });
   }
 });
